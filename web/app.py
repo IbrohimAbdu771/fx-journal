@@ -7,8 +7,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import csv
+import io
 import logging
 import os
+import time
+from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -19,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
-from core import db, ict, repository, service, stats
+from core import db, ict, imaging, repository, service, stats
 from core.config import load_config, setup_logging
 
 setup_logging()
@@ -58,9 +62,24 @@ async def lifespan(app: FastAPI):
         await db.dispose_engine()
 
 
+SESSION_TTL = 3600  # 1 hour, then re-login
+
 app = FastAPI(title="FX Journal", lifespan=lifespan)
-app.add_middleware(SessionMiddleware, secret_key=(cfg.web_password or "fx-journal-dev-secret"))
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
+# NOTE: SessionMiddleware is added at the BOTTOM of this module so it wraps the
+# auth_gate middleware (must be outermost for request.session to be available).
+
+# primitive per-IP login rate limit
+_login_hits: dict[str, list[float]] = defaultdict(list)
+LOGIN_MAX = 5
+LOGIN_WINDOW = 300  # seconds
+
+
+def _login_blocked(ip: str) -> bool:
+    now = time.time()
+    hits = [t for t in _login_hits[ip] if now - t < LOGIN_WINDOW]
+    _login_hits[ip] = hits
+    return len(hits) >= LOGIN_MAX
 
 
 # --------------------------------------------------------------------------- #
@@ -88,9 +107,17 @@ async def login_form(request: Request):
 
 @app.post("/login")
 async def login(request: Request, password: str = Form("")):
+    ip = request.client.host if request.client else "?"
+    if _login_blocked(ip):
+        return templates.TemplateResponse(
+            "login.html",
+            {"request": request, "error": "Слишком много попыток. Подождите 5 минут."},
+            status_code=429,
+        )
     if password == cfg.web_password:
         request.session["auth"] = True
         return RedirectResponse("/", status_code=302)
+    _login_hits[ip].append(time.time())
     return templates.TemplateResponse(
         "login.html", {"request": request, "error": "Неверный пароль"}, status_code=401
     )
@@ -162,7 +189,7 @@ async def _read_upload(upload: UploadFile | None) -> tuple[bytes | None, str | N
     if upload and upload.filename:
         data = await upload.read()
         if data:
-            return data, upload.content_type or "image/jpeg"
+            return imaging.compress_image(data)
     return None, None
 
 
@@ -337,3 +364,48 @@ async def chart(trade_id: int, which: str):
 async def api_stats(period: str = "all", mode: str = "live"):
     s = stats.compute_stats(await repository.stats_dicts(_since(period), _norm_mode(mode)))
     return s.as_dict()
+
+
+EXPORT_COLS = [
+    "id", "trade_time", "mode", "pair", "direction", "entry", "stop_loss", "take_profit",
+    "lot", "risk_pct", "rr_planned", "result_r", "result_usd", "outcome", "status",
+    "session", "sb_window", "asia_type", "setup", "sweep_reference", "ote_level",
+    "mss_confirmed", "news_blackout", "plan_followed", "violation_type", "emotion", "notes",
+]
+
+
+@app.get("/api/trades")
+async def api_trades(period: str = "all", mode: str = "live", format: str = "json"):
+    """Export trades for external analysis (pandas etc.) as JSON or CSV."""
+    mode = _norm_mode(mode)
+    trades = await repository.list_trades(limit=100000, since=_since(period), mode=mode)
+
+    if format == "csv":
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(EXPORT_COLS)
+        for t in trades:
+            row = []
+            for c in EXPORT_COLS:
+                v = t.get(c)
+                if isinstance(v, list):
+                    v = ";".join(v)
+                elif hasattr(v, "isoformat"):
+                    v = v.isoformat()
+                row.append("" if v is None else v)
+            writer.writerow(row)
+        return Response(
+            buf.getvalue(), media_type="text/csv",
+            headers={"Content-Disposition": f'attachment; filename="trades_{mode}.csv"'},
+        )
+
+    return [{c: t.get(c) for c in EXPORT_COLS} for t in trades]
+
+
+# Added last so it wraps auth_gate (outermost) → request.session is available there.
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=(cfg.web_password or "dev") + "::fx-journal-session-v1",
+    max_age=SESSION_TTL,
+    same_site="lax",
+)

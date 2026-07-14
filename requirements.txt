@@ -20,6 +20,7 @@ apscheduler==3.10.4
 # misc
 python-dotenv==1.0.1
 tzdata==2024.2
+pillow==11.1.0
 
 # tests
 pytest==8.3.4

@@ -26,6 +26,7 @@
   <div class="kpi"><span>Expectancy</span><b class="{{ 'pos' if s.expectancy>=0 else 'neg' }}">{{ "%+.2f"|format(s.expectancy) }}R</b></div>
   <div class="kpi"><span>Day Win %</span><b>{{ pct(s.day_win_pct) }}</b><i>{{s.trading_days}} дн</i></div>
   <div class="kpi"><span>Max Drawdown</span><b class="neg">{{ "%.2f"|format(s.max_drawdown_r) }}R</b></div>
+  <div class="kpi"><span>SQN</span><b>{{ s.sqn }}</b><i>std {{ s.std_r }}R</i></div>
   <div class="kpi"><span>Avg Win / Loss</span><b><span class="pos">{{ "%+.1f"|format(s.avg_win_r) }}</span><span class="neg"> / {{ "%+.1f"|format(s.avg_loss_r) }}</span></b></div>
   <div class="kpi"><span>Баланс</span><b>{{ "%.0f"|format(balance) }}$</b></div>
 </section>

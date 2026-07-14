@@ -18,13 +18,16 @@ from aiogram.filters import Command
 from aiogram.types import (
     BotCommand,
     BufferedInputFile,
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
     KeyboardButton,
     LinkPreviewOptions,
     Message,
     ReplyKeyboardMarkup,
 )
 
-from core import repository, service, stats
+from core import imaging, repository, service, stats
 from core.ict import now_ny
 from . import news
 from .parser import TradeParser
@@ -51,6 +54,13 @@ def _mode_title(base: str, mode: str) -> str:
     return f"{base} · 🧪 BACKTEST" if mode == "backtest" else base
 
 
+CONFIRM_KB = InlineKeyboardMarkup(inline_keyboard=[[
+    InlineKeyboardButton(text="✅ Сохранить", callback_data="nt:save"),
+    InlineKeyboardButton(text="✏️ Исправить", callback_data="nt:edit"),
+    InlineKeyboardButton(text="❌ Отмена", callback_data="nt:cancel"),
+]])
+
+
 def _v(x, nd: int | None = None) -> str | None:
     if x is None:
         return None
@@ -64,8 +74,11 @@ def _esc(x) -> str:
 
 
 def format_trade_card(t: dict, title: str = "✅ Сделка записана") -> str:
-    """Render a trade as a formatted HTML card for Telegram."""
-    L: list[str] = [f"<b>{title}</b>  ·  #{t['id']}"]
+    """Render a trade (or an unsaved preview without id) as an HTML card."""
+    head = f"<b>{title}</b>"
+    if t.get("id"):
+        head += f"  ·  #{t['id']}"
+    L: list[str] = [head]
 
     pairdir = " · ".join(x for x in [t.get("pair"), (t.get("direction") or "").upper()] if x)
     status = t.get("status") or ""
@@ -160,9 +173,11 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
     web_base = os.getenv("WEB_BASE_URL", "").rstrip("/")
 
     router.message.filter(F.from_user.id == cfg.allowed_user_id)
+    router.callback_query.filter(F.from_user.id == cfg.allowed_user_id)
 
     stashed_image: dict[int, tuple[bytes, str, float]] = {}
-    pending_clarify: dict[int, int] = {}
+    pending_new: dict[int, dict] = {}   # uid -> unsaved trade awaiting confirmation
+    awaiting_fix: set[int] = set()      # uid pressed ✏️ — next message is a correction
 
     def _link(trade_id: int) -> str:
         if not web_base:
@@ -179,22 +194,28 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         buf = await message.bot.download(file)
         return buf.read()
 
+    async def _send_confirm(message: Message, pend: dict):
+        preview = pend["data"]
+        mode = preview.get("mode", "live")
+        card = format_trade_card(preview, _mode_title("🆕 Проверь и подтверди", mode))
+        missing = service.missing_critical(preview)
+        if missing:
+            card += f"\n\n❓ Не хватает: <b>{', '.join(missing)}</b> — нажми ✏️ и допиши."
+        card += "\n\n<i>Проверь цены — Claude мог распознать неточно.</i>"
+        await message.answer(card, parse_mode="HTML", reply_markup=CONFIRM_KB,
+                             link_preview_options=NO_PREVIEW)
+
     async def _reply_new(message: Message, data: dict, image: bytes | None, mime: str):
+        """Parse → show a confirmation card; write to DB only on ✅."""
         uid = message.from_user.id
         mode = await _mode(uid)
         trade_time = now_ny(cfg.timezone)
         enriched = service.enrich(data, trade_time, cfg.timezone)
         enriched["mode"] = mode
         enriched["raw_message"] = data.get("raw_message")
-        trade = await repository.add_trade(
-            enriched, chart_before=image, chart_before_mime=mime if image else None
-        )
-        missing = service.missing_critical(enriched)
-        text = format_trade_card(trade, _mode_title("✅ Сделка записана", mode)) + _link(trade["id"])
-        if missing:
-            pending_clarify[uid] = trade["id"]
-            text += f"\n\n❓ Не хватает: <b>{', '.join(missing)}</b>. Ответь одним сообщением — допишу."
-        await _card(message, text)
+        pending_new[uid] = {"data": enriched, "image": image, "mime": mime, "trade_time": trade_time}
+        awaiting_fix.discard(uid)
+        await _send_confirm(message, pending_new[uid])
 
     async def _reply_close(message: Message, data: dict, image: bytes | None, mime: str):
         mode = await _mode(message.from_user.id)
@@ -238,18 +259,17 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
     async def _process(message: Message, text: str | None, image: bytes | None, mime: str = "image/jpeg"):
         uid = message.from_user.id
 
-        if uid in pending_clarify and text:
-            trade_id = pending_clarify.pop(uid)
-            data = await parser.extract(text=text, image_bytes=image, image_media_type=mime)
-            base = await repository.get_trade(trade_id)
-            if base:
-                fields = {k: data.get(k) for k in service.EDITABLE_FIELDS
-                          if data.get(k) not in (None, [], "")}
-                merged = {**base, **fields}
-                enriched = service.enrich(merged, base.get("trade_time"), cfg.timezone)
-                trade = await repository.update_trade(trade_id, enriched)
-                await _card(message, format_trade_card(trade, _mode_title("✅ Дополнил", base.get("mode", "live"))) + _link(trade_id))
-                return
+        # correction to an UNSAVED pending trade (user pressed ✏️)
+        if uid in awaiting_fix and text and uid in pending_new:
+            awaiting_fix.discard(uid)
+            corr = await parser.extract(text=text)
+            pend = pending_new[uid]
+            fields = {k: corr.get(k) for k in service.EDITABLE_FIELDS
+                      if corr.get(k) not in (None, [], "")}
+            merged = {**pend["data"], **fields}
+            pend["data"] = service.enrich(merged, pend["trade_time"], cfg.timezone)
+            await _send_confirm(message, pend)
+            return
 
         if image and not (text and text.strip()):
             stashed_image[uid] = (image, mime, time.time())
@@ -356,10 +376,47 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
     async def btn_news(message: Message):
         await _send_news(message)
 
+    @router.callback_query(F.data.startswith("nt:"))
+    async def on_confirm(cb: CallbackQuery):
+        uid = cb.from_user.id
+        action = cb.data.split(":", 1)[1]
+        pend = pending_new.get(uid)
+        if not pend:
+            await cb.answer("Сделка уже обработана")
+            return
+        if action == "cancel":
+            pending_new.pop(uid, None)
+            awaiting_fix.discard(uid)
+            await cb.message.edit_text("❌ Отменено — в базу не записано.")
+            await cb.answer("Отменено")
+            return
+        if action == "edit":
+            awaiting_fix.add(uid)
+            await cb.answer("Жду исправление")
+            await cb.message.answer(
+                "✏️ Что исправить? Напиши одним сообщением, напр.: «вход 1.0850, стоп 1.0832»."
+            )
+            return
+        # save
+        data, image, mime = pend["data"], pend["image"], pend["mime"]
+        pending_new.pop(uid, None)
+        awaiting_fix.discard(uid)
+        trade = await repository.add_trade(
+            data, chart_before=image, chart_before_mime=mime if image else None
+        )
+        mode = data.get("mode", "live")
+        text = format_trade_card(trade, _mode_title("✅ Сохранено", mode)) + _link(trade["id"])
+        missing = service.missing_critical(data)
+        if missing:
+            text += f"\n\n⚠️ Не заполнено: {', '.join(missing)} — допиши на сайте."
+        await cb.message.edit_text(text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
+        await cb.answer("Записал ✅")
+
     @router.message(F.photo)
     async def on_photo(message: Message):
-        image = await _download(message, message.photo[-1])
-        await _process(message, message.caption, image, "image/jpeg")
+        raw = await _download(message, message.photo[-1])
+        image, mime = imaging.compress_image(raw)
+        await _process(message, message.caption, image, mime)
 
     @router.message(F.voice)
     async def on_voice(message: Message):

@@ -71,6 +71,8 @@ class Stats:
     net_pnl: float = 0.0            # $ over counted trades
     avg_r: float = 0.0
     expectancy: float = 0.0        # R/trade (== avg_r)
+    std_r: float = 0.0             # population std of R
+    sqn: float = 0.0               # System Quality Number = mean/std * sqrt(N)
     profit_factor: float | None = None
     # win/loss shape
     avg_win_r: float = 0.0
@@ -305,8 +307,17 @@ def compute_stats(trades: list[dict]) -> Stats:
 
     s.total_r = round(sum(r_vals), 2)
     s.net_pnl = round(sum(usd_vals), 2)
-    s.avg_r = round(s.total_r / s.total, 2)
+    mean_r = sum(r_vals) / s.total
+    s.avg_r = round(mean_r, 2)
     s.expectancy = s.avg_r
+
+    # dispersion & System Quality Number (Van Tharp): mean/std * sqrt(N)
+    if s.total > 1:
+        variance = sum((r - mean_r) ** 2 for r in r_vals) / s.total
+        std = variance ** 0.5
+        s.std_r = round(std, 2)
+        if std > 0:
+            s.sqn = round((mean_r / std) * (s.total ** 0.5), 2)
 
     gross_win = sum(r for r in r_vals if r > 0)
     gross_loss = -sum(r for r in r_vals if r < 0)
@@ -418,6 +429,7 @@ def format_stats(s: Stats, title: str = "📊 Статистика") -> str:
         f"Expectancy: {s.expectancy:+.2f}R   Profit factor: {pf}   Payoff: {payoff}",
         f"Avg win/loss: {s.avg_win_r:+.2f}R / {s.avg_loss_r:+.2f}R",
         f"Max DD: {s.max_drawdown_r:.2f}R   Recovery: {rec}",
+        f"SQN: {s.sqn}   Std R: {s.std_r}R",
         f"Серия: {streak_txt}   (max {s.max_win_streak}✅ / {s.max_loss_streak}❌)",
     ]
     if s.missed or s.no_trade or s.open_positions:
