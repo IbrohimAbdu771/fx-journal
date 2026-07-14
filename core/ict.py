@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime, time
 from zoneinfo import ZoneInfo
 
-# --- Controlled vocabularies (must match Notion select options) ---------------
+# --- Controlled vocabularies (used by forms, parser and DB) -------------------
 
 PAIRS = ["EURUSD", "GBPUSD", "другое"]
 DIRECTIONS = ["Long", "Short"]
