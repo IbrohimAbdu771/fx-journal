@@ -2,11 +2,12 @@
 
 Ingests trades from photo (chart) + text/voice, parses them with Claude, writes
 to the shared database, and answers /stats /last /open. Responds ONLY to the
-whitelisted user id.
+whitelisted user id. Trade cards are rendered as formatted HTML.
 """
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import os
 import time
@@ -14,7 +15,12 @@ from datetime import timedelta
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.filters import Command
-from aiogram.types import BufferedInputFile, Message
+from aiogram.types import (
+    BotCommand,
+    BufferedInputFile,
+    LinkPreviewOptions,
+    Message,
+)
 
 from core import repository, service, stats
 from core.ict import now_ny
@@ -24,57 +30,101 @@ from .transcribe import TranscriptionError, transcribe_ogg
 logger = logging.getLogger(__name__)
 
 IMAGE_TTL = 300  # seconds a stashed chart waits for its description
+NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 
 
-def _fmt(v, suffix: str = "") -> str:
-    if v is None:
-        return "—"
-    if isinstance(v, float):
-        return f"{v:g}{suffix}"
-    return f"{v}{suffix}"
+def _v(x, nd: int | None = None) -> str | None:
+    if x is None:
+        return None
+    if isinstance(x, float):
+        return f"{x:.{nd}f}" if nd is not None else f"{x:g}"
+    return str(x)
 
 
-def format_trade_card(t: dict, title: str = "✅ Записал сделку") -> str:
-    lines = [f"{title} #{t['id']} — {t.get('name') or ''}".rstrip()]
-    lines.append(f"{t.get('pair') or '—'} {t.get('direction') or ''}  [{t.get('status')}]".strip())
-    lines.append(
-        f"Entry {_fmt(t.get('entry'))} | SL {_fmt(t.get('stop_loss'))} | "
-        f"TP {_fmt(t.get('take_profit'))} | RR {_fmt(t.get('rr_planned'))}"
-    )
-    if t.get("lot") is not None or t.get("risk_pct") is not None:
-        lines.append(f"Lot {_fmt(t.get('lot'))} | Risk {_fmt(t.get('risk_pct'), '%')}")
-    ctx = []
+def _esc(x) -> str:
+    return html.escape(str(x))
+
+
+def format_trade_card(t: dict, title: str = "✅ Сделка записана") -> str:
+    """Render a trade as a formatted HTML card for Telegram."""
+    L: list[str] = [f"<b>{title}</b>  ·  #{t['id']}"]
+
+    pairdir = " · ".join(x for x in [t.get("pair"), (t.get("direction") or "").upper()] if x)
+    status = t.get("status") or ""
+    dot = "🟢" if status == "Open" else "⚪️"
+    head = f"<b>{_esc(pairdir) or '—'}</b>"
+    if status:
+        head += f"   {dot} {status}"
+    L.append(head)
+
+    # result banner (closed / has result)
+    if t.get("result_r") is not None or t.get("outcome"):
+        r = t.get("result_r")
+        emoji = "🏆" if (r or 0) > 0 else ("💔" if (r or 0) < 0 else "➖")
+        parts = []
+        if r is not None:
+            parts.append(f"{r:+.2f}R")
+        if t.get("result_usd") is not None:
+            parts.append(f"{t['result_usd']:+.2f}$")
+        if t.get("outcome"):
+            parts.append(t["outcome"])
+        L.append(f"{emoji} <b>{' · '.join(parts)}</b>")
+
+    # price block (monospace, aligned)
+    price = []
+    for lbl, key in (("Entry", "entry"), ("Stop", "stop_loss"), ("Take", "take_profit")):
+        v = _v(t.get(key))
+        if v is not None:
+            price.append(f"{lbl:<6}{v}")
+    tail = []
+    if t.get("rr_planned") is not None:
+        tail.append(f"RR {_v(t['rr_planned'])}")
+    if t.get("risk_pct") is not None:
+        tail.append(f"риск {_v(t['risk_pct'])}%")
+    if t.get("lot") is not None:
+        tail.append(f"лот {_v(t['lot'])}")
+    if tail:
+        price.append(("─" * 6) + "  " + "  ".join(tail))
+    if price:
+        L.append(f"\n<b>💵 Цена</b>\n<pre>{_esc(chr(10).join(price))}</pre>")
+
+    # ICT context
+    ict_lines = []
     if t.get("session"):
-        ctx.append(t["session"])
-    if t.get("sb_window"):
-        ctx.append("SB")
+        s = t["session"] + (" 🥈" if t.get("sb_window") else "")
+        ict_lines.append(f"Сессия · {s}")
     if t.get("setup"):
-        ctx.append(t["setup"])
+        ict_lines.append(f"Сетап · {_esc(t['setup'])}")
+    row = []
     if t.get("sweep_reference"):
-        ctx.append(f"sweep {t['sweep_reference']}")
+        row.append(f"Sweep {t['sweep_reference']}")
     if t.get("ote_level"):
-        ctx.append(f"OTE {t['ote_level']}")
+        row.append(f"OTE {t['ote_level']}")
     if t.get("mss_confirmed"):
-        ctx.append("MSS✓")
-    if ctx:
-        lines.append(" · ".join(ctx))
-    if t.get("outcome") or t.get("result_r") is not None:
-        lines.append(
-            f"Результат: {t.get('outcome') or '—'}  "
-            f"{_fmt(t.get('result_r'), 'R')}  {_fmt(t.get('result_usd'), '$')}"
-        )
+        row.append("MSS ✓")
+    if t.get("asia_type"):
+        row.append(f"Asia {t['asia_type']}")
+    if row:
+        ict_lines.append(" · ".join(row))
+    if ict_lines:
+        L.append("\n<b>🎯 ICT-контекст</b>")
+        L.extend(ict_lines)
+
+    # discipline
     disc = []
     if t.get("plan_followed"):
         disc.append(t["plan_followed"])
     if t.get("emotion"):
         disc.append(t["emotion"])
     if t.get("violation_type"):
-        disc.append("нарушения: " + ", ".join(t["violation_type"]))
+        disc.append("⚠️ " + ", ".join(t["violation_type"]))
     if disc:
-        lines.append(" · ".join(disc))
+        L.append("\n<b>🧠 Дисциплина</b>")
+        L.append(" · ".join(_esc(d) for d in disc))
+
     if t.get("notes"):
-        lines.append(f"📝 {t['notes']}")
-    return "\n".join(lines)
+        L.append(f"\n📝 <i>{_esc(t['notes'])}</i>")
+    return "\n".join(L)
 
 
 def _since(period: str, tz: str):
@@ -91,14 +141,18 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
     parser = TradeParser(cfg.anthropic_api_key, cfg.claude_model)
     web_base = os.getenv("WEB_BASE_URL", "").rstrip("/")
 
-    # only the owner
     router.message.filter(F.from_user.id == cfg.allowed_user_id)
 
     stashed_image: dict[int, tuple[bytes, str, float]] = {}
-    pending_clarify: dict[int, int] = {}  # uid -> trade_id awaiting missing fields
+    pending_clarify: dict[int, int] = {}
 
     def _link(trade_id: int) -> str:
-        return f"\n🔗 {web_base}/trade/{trade_id}" if web_base else ""
+        if not web_base:
+            return ""
+        return f'\n\n🔗 <a href="{web_base}/trade/{trade_id}">Открыть на сайте</a>'
+
+    async def _card(message: Message, text: str):
+        await message.answer(text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
 
     async def _download(message: Message, file) -> bytes:
         buf = await message.bot.download(file)
@@ -116,8 +170,8 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         text = format_trade_card(trade) + _link(trade["id"])
         if missing:
             pending_clarify[uid] = trade["id"]
-            text += f"\n\n❓ Не хватает: {', '.join(missing)}. Ответь одним сообщением, я допишу."
-        await message.answer(text)
+            text += f"\n\n❓ Не хватает: <b>{', '.join(missing)}</b>. Ответь одним сообщением — допишу."
+        await _card(message, text)
 
     async def _reply_close(message: Message, data: dict, image: bytes | None, mime: str):
         pair = data.get("pair")
@@ -133,13 +187,11 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
             chart_after=image,
             chart_after_mime=mime if image else None,
         )
-        # extra notes/discipline on close
         extra = {k: data.get(k) for k in ("notes", "plan_followed", "emotion", "violation_type")
                  if data.get(k)}
         if extra:
             trade = await repository.update_trade(trade["id"], extra)
-        await message.answer(format_trade_card(trade, "🔒 Закрыл сделку") + _link(trade["id"]))
-        # mini weekly summary
+        await _card(message, format_trade_card(trade, "🔒 Сделка закрыта") + _link(trade["id"]))
         since, _ = _since("week", cfg.timezone)
         s = stats.compute_stats(await repository.stats_dicts(since))
         await message.answer(
@@ -156,12 +208,11 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         merged = {**last, **fields}
         enriched = service.enrich(merged, last.get("trade_time") or now_ny(cfg.timezone), cfg.timezone)
         trade = await repository.update_trade(last["id"], enriched)
-        await message.answer(format_trade_card(trade, "✏️ Обновил") + _link(trade["id"]))
+        await _card(message, format_trade_card(trade, "✏️ Обновил") + _link(trade["id"]))
 
     async def _process(message: Message, text: str | None, image: bytes | None, mime: str = "image/jpeg"):
         uid = message.from_user.id
 
-        # 1) clarification merge
         if uid in pending_clarify and text:
             trade_id = pending_clarify.pop(uid)
             data = await parser.extract(text=text, image_bytes=image, image_media_type=mime)
@@ -172,16 +223,14 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
                 merged = {**base, **fields}
                 enriched = service.enrich(merged, base.get("trade_time"), cfg.timezone)
                 trade = await repository.update_trade(trade_id, enriched)
-                await message.answer(format_trade_card(trade, "✅ Дополнил") + _link(trade_id))
+                await _card(message, format_trade_card(trade, "✅ Дополнил") + _link(trade_id))
                 return
 
-        # 2) stash image without description
         if image and not (text and text.strip()):
             stashed_image[uid] = (image, mime, time.time())
-            await message.answer("📸 Фото получил. Добавь описание текстом или голосом.")
+            await message.answer("📸 Фото получил. Добавь описание текстом или голосовым.")
             return
 
-        # 3) pull a recently stashed image if this message is text-only
         if not image and uid in stashed_image:
             img, img_mime, ts = stashed_image[uid]
             if time.time() - ts <= IMAGE_TTL:
@@ -200,18 +249,20 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         else:
             await message.answer(
                 "Не понял. Пришли график с подписью, голосовое, «закрыл EURUSD +1.8R» "
-                "или /stats, /last, /open."
+                "или команды /stats /last /open."
             )
 
     # ---- handlers ----
     @router.message(Command("start", "help"))
     async def cmd_start(message: Message):
         await message.answer(
-            "📓 FX Journal\n\n"
-            "• Новая сделка: фото графика с подписью, или фото + голосовое.\n"
-            "• Закрытие: «закрыл EURUSD +1.8R» (можно скрин после).\n"
-            "• Правка: «исправь: стоп был 1.0832».\n\n"
-            "Команды: /stats [month] · /last · /open"
+            "<b>📓 FX Journal</b>\n"
+            "R-based ICT trading log\n\n"
+            "• <b>Новая сделка</b> — фото графика с подписью, или фото + голосовое\n"
+            "• <b>Закрытие</b> — «закрыл EURUSD +1.8R» (можно скрин после)\n"
+            "• <b>Правка</b> — «исправь: стоп был 1.0832»\n\n"
+            "Команды: /stats · /last · /open",
+            parse_mode="HTML",
         )
 
     @router.message(Command("stats"))
@@ -227,7 +278,7 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         if not last:
             await message.answer("Записей пока нет.")
             return
-        await message.answer(format_trade_card(last, "🗒 Последняя") + _link(last["id"]))
+        await _card(message, format_trade_card(last, "🗒 Последняя сделка") + _link(last["id"]))
         chart = await repository.get_chart(last["id"], "before")
         if chart:
             await message.answer_photo(BufferedInputFile(chart[0], "chart.jpg"))
@@ -238,7 +289,8 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         if not opens:
             await message.answer("Открытых позиций нет.")
             return
-        await message.answer("\n\n".join(format_trade_card(t, "🟢 Открыта") for t in opens))
+        text = "\n\n".join(format_trade_card(t, "🟢 Открыта") for t in opens)
+        await _card(message, text)
 
     @router.message(F.photo)
     async def on_photo(message: Message):
@@ -267,18 +319,27 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
     return bot, dp
 
 
+BOT_COMMANDS = [
+    BotCommand(command="start", description="Меню и помощь"),
+    BotCommand(command="stats", description="Статистика · /stats month"),
+    BotCommand(command="last", description="Последняя сделка"),
+    BotCommand(command="open", description="Открытые позиции"),
+]
+
+
 async def run_bot(cfg) -> None:
-    """Build the bot, start the weekly scheduler, and poll until cancelled."""
-    from .scheduler import start_scheduler  # local import to avoid cycle
+    """Build the bot, register the command menu, start the scheduler, poll."""
+    from .scheduler import start_scheduler
 
     bot, dp = build_dispatcher(cfg)
     parser = TradeParser(cfg.anthropic_api_key, cfg.claude_model)
     scheduler = start_scheduler(cfg, bot, parser)
     try:
         await bot.delete_webhook(drop_pending_updates=True)
+        await bot.set_my_commands(BOT_COMMANDS)
         logger.info("Telegram bot polling started")
         await dp.start_polling(bot, handle_signals=False)
-    except asyncio.CancelledError:  # graceful shutdown from the web lifespan
+    except asyncio.CancelledError:
         logger.info("Telegram bot polling cancelled")
         raise
     finally:

@@ -4,20 +4,48 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}FX Journal{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
 </head>
 <body>
+  <div class="bg" aria-hidden="true">
+    <span class="glow glow-emerald"></span>
+    <span class="glow glow-gold"></span>
+    <span class="grain"></span>
+  </div>
+
   <header class="topbar">
-    <a class="brand" href="/">📓 FX&nbsp;Journal</a>
-    <nav>
-      <a href="/">Дашборд</a>
-      <a href="/trades">Сделки</a>
-      <a class="btn-primary" href="/new">+ Сделка</a>
+    <a class="brand" href="/">
+      <img src="/static/logo.svg" alt="" class="brand-mark">
+      <span class="brand-word">FX&nbsp;<em>Journal</em></span>
+    </a>
+    <nav class="nav">
+      <a href="/" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+        <span>Дашборд</span>
+      </a>
+      <a href="/trades" class="nav-link">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+        <span>Сделки</span>
+      </a>
+      <a href="/new" class="btn btn-primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+        <span>Сделка</span>
+      </a>
     </nav>
   </header>
+
   <main class="container">
     {% block content %}{% endblock %}
   </main>
-  <footer class="foot">R-based ICT journal · <a href="/logout">выход</a></footer>
+
+  <footer class="foot">
+    <span class="sig"></span> FX Journal — R-based ICT trading log
+    <a href="/logout">выход</a>
+  </footer>
 </body>
 </html>

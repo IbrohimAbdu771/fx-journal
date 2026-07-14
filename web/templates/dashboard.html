@@ -16,25 +16,25 @@
 <section class="kpis">
   <div class="kpi"><span>Net P&amp;L</span><b class="{{ 'pos' if s.net_pnl>=0 else 'neg' }}">{{ "%+.2f"|format(s.net_pnl) }}$</b></div>
   <div class="kpi"><span>Total R</span><b class="{{ 'pos' if s.total_r>=0 else 'neg' }}">{{ "%+.2f"|format(s.total_r) }}R</b></div>
-  <div class="kpi"><span>Win %</span><b>{{ pct(s.winrate) }}</b><i>{{s.wins}}✅ {{s.losses}}❌ {{s.breakeven}}➖</i></div>
+  <div class="kpi"><span>Win Rate</span><b>{{ pct(s.winrate) }}</b><i>{{s.wins}}·{{s.losses}}·{{s.breakeven}}</i></div>
   <div class="kpi"><span>Profit Factor</span><b>{{ pf(s.profit_factor) }}</b></div>
+  <div class="kpi zella">
+    <div class="gauge" style="--val: {{ s.zella_score }}"><b>{{ "%.0f"|format(s.zella_score) }}</b></div>
+    <div class="z-meta"><span>Zella Score</span><i>из 100</i></div>
+  </div>
+
   <div class="kpi"><span>Expectancy</span><b class="{{ 'pos' if s.expectancy>=0 else 'neg' }}">{{ "%+.2f"|format(s.expectancy) }}R</b></div>
   <div class="kpi"><span>Day Win %</span><b>{{ pct(s.day_win_pct) }}</b><i>{{s.trading_days}} дн</i></div>
-  <div class="kpi"><span>Max Drawdown</span><b class="neg">{{ "%.2f"|format(s.max_drawdown_r) }}R</b><i>{{ usd(s.max_drawdown_usd if s.max_drawdown_usd else none) }}</i></div>
-  <div class="kpi"><span>Avg Win / Loss</span><b><span class="pos">{{ "%+.2f"|format(s.avg_win_r) }}</span> / <span class="neg">{{ "%+.2f"|format(s.avg_loss_r) }}</span></b></div>
-  <div class="kpi"><span>Баланс</span><b>{{ "%.2f"|format(balance) }}$</b></div>
-  <div class="kpi zella">
-    <span>Zella Score</span>
-    <b class="{{ 'pos' if s.zella_score>=60 else ('neg' if s.zella_score<40 else '') }}">{{ "%.0f"|format(s.zella_score) }}</b>
-    <div class="zbar"><div style="width: {{ s.zella_score }}%"></div></div>
-  </div>
+  <div class="kpi"><span>Max Drawdown</span><b class="neg">{{ "%.2f"|format(s.max_drawdown_r) }}R</b></div>
+  <div class="kpi"><span>Avg Win / Loss</span><b><span class="pos">{{ "%+.1f"|format(s.avg_win_r) }}</span><span class="neg"> / {{ "%+.1f"|format(s.avg_loss_r) }}</span></b></div>
+  <div class="kpi"><span>Баланс</span><b>{{ "%.0f"|format(balance) }}$</b></div>
 </section>
 
 <section class="grid-2">
   <div class="card">
-    <div class="card-h">Кумулятивный R (equity curve)</div>
+    <div class="card-h">Equity curve · кумулятивный R</div>
     {{ equity_svg|safe }}
-    <div class="curve-meta">Recovery factor: {{ pf(s.recovery_factor) }} · серия {{ "%+d"|format(s.streak) }} · max {{s.max_win_streak}}✅/{{s.max_loss_streak}}❌</div>
+    <div class="curve-meta">Recovery {{ pf(s.recovery_factor) }} · серия {{ "%+d"|format(s.streak) }} · max {{s.max_win_streak}}/{{s.max_loss_streak}}</div>
   </div>
   <div class="card">
     <div class="card-h">Zella breakdown</div>
@@ -50,8 +50,8 @@
   <div class="card">
     <div class="card-h">
       <a class="navlink" href="/?period={{period}}&y={{ calendar.year if calendar.month>1 else calendar.year-1 }}&m={{ calendar.month-1 if calendar.month>1 else 12 }}">‹</a>
-      Календарь — {{ calendar.label }}
-      <span class="month-r {{ 'pos' if calendar.month_r>=0 else 'neg' }}">{{ "%+.2f"|format(calendar.month_r) }}R · {{ calendar.month_trades }} сд</span>
+      {{ calendar.label }}
+      <span class="month-r {{ 'pos' if calendar.month_r>=0 else 'neg' }}">{{ "%+.2f"|format(calendar.month_r) }}R · {{ calendar.month_trades }}</span>
       <a class="navlink" href="/?period={{period}}&y={{ calendar.year if calendar.month<12 else calendar.year+1 }}&m={{ calendar.month+1 if calendar.month<12 else 1 }}">›</a>
     </div>
     <div class="cal">
@@ -99,15 +99,15 @@
 
 {% if open_trades %}
 <section class="card">
-  <div class="card-h">🟢 Открытые позиции</div>
+  <div class="card-h">Открытые позиции</div>
   <table class="log">
     <tr><th>#</th><th>Пара</th><th>Напр.</th><th>Entry</th><th>SL</th><th>TP</th><th>RR</th><th>Сессия</th><th>Сетап</th><th></th></tr>
     {% for t in open_trades %}
-    <tr>
-      <td>{{ t.id }}</td><td>{{ t.pair or '—' }}</td><td>{{ t.direction or '' }}</td>
-      <td>{{ t.entry or '—' }}</td><td>{{ t.stop_loss or '—' }}</td><td>{{ t.take_profit or '—' }}</td>
-      <td>{{ t.rr_planned or '—' }}</td><td>{{ t.session or '' }}</td><td>{{ t.setup or '' }}</td>
-      <td><a href="/trade/{{ t.id }}">открыть →</a></td>
+    <tr class="row-link" data-href="/trade/{{ t.id }}" tabindex="0" role="link">
+      <td class="n">{{ t.id }}</td><td>{{ t.pair or '—' }}</td><td>{{ t.direction or '' }}</td>
+      <td class="n">{{ t.entry or '—' }}</td><td class="n">{{ t.stop_loss or '—' }}</td><td class="n">{{ t.take_profit or '—' }}</td>
+      <td class="n">{{ t.rr_planned or '—' }}</td><td>{{ t.session or '' }}</td><td>{{ t.setup or '' }}</td>
+      <td class="go">›</td>
     </tr>
     {% endfor %}
   </table>
@@ -119,18 +119,18 @@
   <table class="log">
     <tr><th>#</th><th>Дата</th><th>Пара</th><th>Напр.</th><th>Сессия</th><th>Сетап</th><th>Итог</th><th>R</th><th>$</th><th></th></tr>
     {% for t in recent %}
-    <tr>
-      <td>{{ t.id }}</td>
-      <td>{{ t.trade_time.strftime('%d.%m %H:%M') if t.trade_time else '' }}</td>
+    <tr class="row-link" data-href="/trade/{{ t.id }}" tabindex="0" role="link">
+      <td class="n">{{ t.id }}</td>
+      <td class="n">{{ t.trade_time.strftime('%d.%m %H:%M') if t.trade_time else '' }}</td>
       <td>{{ t.pair or '—' }}</td><td>{{ t.direction or '' }}</td>
       <td>{{ t.session or '' }}</td><td>{{ t.setup or '' }}</td>
       <td><span class="badge {{ t.status|lower }}">{{ t.outcome or t.status }}</span></td>
-      <td class="{{ 'pos' if (t.result_r or 0)>=0 else 'neg' }}">{{ rr(t.result_r) }}</td>
-      <td class="{{ 'pos' if (t.result_usd or 0)>=0 else 'neg' }}">{{ usd(t.result_usd) }}</td>
-      <td><a href="/trade/{{ t.id }}">→</a></td>
+      <td class="n {{ 'pos' if (t.result_r or 0)>=0 else 'neg' }}">{{ rr(t.result_r) }}</td>
+      <td class="n {{ 'pos' if (t.result_usd or 0)>=0 else 'neg' }}">{{ usd(t.result_usd) }}</td>
+      <td class="go">›</td>
     </tr>
     {% endfor %}
-    {% if not recent %}<tr><td colspan="10" class="empty">Пока нет сделок. <a href="/new">Добавить</a></td></tr>{% endif %}
+    {% if not recent %}<tr><td colspan="10" class="empty">Пока нет сделок. <a href="/new">Добавить первую →</a></td></tr>{% endif %}
   </table>
 </section>
 {% endblock %}

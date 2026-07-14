@@ -4,14 +4,24 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Вход — FX Journal</title>
+  <link rel="icon" type="image/svg+xml" href="/static/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="login-body">
+  <div class="bg" aria-hidden="true">
+    <span class="glow glow-emerald"></span>
+    <span class="glow glow-gold"></span>
+    <span class="grain"></span>
+  </div>
   <form class="login-card" method="post" action="/login">
-    <h1>📓 FX Journal</h1>
+    <img src="/static/logo.svg" alt="" style="width:54px;height:54px;margin:0 auto 4px">
+    <h1 style="font-family:var(--font-display)">FX Journal</h1>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
     <input type="password" name="password" placeholder="Пароль" autofocus>
-    <button class="btn-primary" type="submit">Войти</button>
+    <button class="btn btn-primary" type="submit" style="justify-content:center">Войти</button>
   </form>
 </body>
 </html>
