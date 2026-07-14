@@ -31,12 +31,6 @@
   <label class="chk"><input type="checkbox" name="mss_confirmed" {{ 'checked' if t.get('mss_confirmed') }}> MSS confirmed</label>
   <label class="chk"><input type="checkbox" name="news_blackout" {{ 'checked' if t.get('news_blackout') }}> News blackout</label>
 
-  {% if show_result|default(true) %}
-  <label>Outcome{{ sel('outcome', ict.OUTCOMES, t.get('outcome')) }}</label>
-  <label>Result R<input name="result_r" type="text" inputmode="decimal" value="{{ t.get('result_r') if t.get('result_r') is not none else '' }}"></label>
-  <label>Result $<input name="result_usd" type="text" inputmode="decimal" value="{{ t.get('result_usd') if t.get('result_usd') is not none else '' }}"></label>
-  {% endif %}
-
   <label>План{{ sel('plan_followed', ict.PLAN_FOLLOWED, t.get('plan_followed')) }}</label>
   <label>Эмоция{{ sel('emotion', ict.EMOTIONS, t.get('emotion')) }}</label>
 </div>

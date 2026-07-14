@@ -223,7 +223,18 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--emerald)
 input[type=checkbox]{width:17px;height:17px;padding:0;accent-color:var(--emerald)}
 input[type=file]{font-family:var(--font-mono);font-size:12px;padding:8px}
 .multi{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px}
-.form-actions{display:flex;gap:12px;margin-top:20px}
+.form-actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
+
+/* result sub-panel */
+.result-block{margin-top:20px;padding:16px;border-radius:14px;
+  background:rgba(39,227,154,.05);border:1px solid rgba(39,227,154,.2)}
+.result-head{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--emerald);margin-bottom:12px}
+
+/* AJAX calendar swap */
+#calendar-card{transition:opacity .15s var(--ease)}
+#calendar-card.loading{opacity:.5}
+.cal-nav{user-select:none}
 
 /* ---- trade detail ---- */
 .detail-head{display:flex;align-items:center;gap:14px;margin-bottom:16px;flex-wrap:wrap}

@@ -47,30 +47,8 @@
 </section>
 
 <section class="grid-2">
-  <div class="card">
-    <div class="card-h">
-      <a class="navlink" href="/?period={{period}}&y={{ calendar.year if calendar.month>1 else calendar.year-1 }}&m={{ calendar.month-1 if calendar.month>1 else 12 }}">‹</a>
-      {{ calendar.label }}
-      <span class="month-r">
-        <span class="{{ 'pos' if calendar.month_r>=0 else 'neg' }}">{{ "%+.2f"|format(calendar.month_r) }}R</span>
-        <span class="{{ 'pos' if calendar.month_usd>=0 else 'neg' }}">{{ "%+.0f"|format(calendar.month_usd) }}$</span>
-        <span class="mut">· {{ calendar.month_trades }}</span>
-      </span>
-      <a class="navlink" href="/?period={{period}}&y={{ calendar.year if calendar.month<12 else calendar.year+1 }}&m={{ calendar.month+1 if calendar.month<12 else 1 }}">›</a>
-    </div>
-    <div class="cal">
-      <div class="cal-row cal-head">{% for wd in calendar.weekdays %}<div>{{wd}}</div>{% endfor %}</div>
-      {% for week in calendar.weeks %}
-      <div class="cal-row">
-        {% for c in week %}
-        <div class="cal-cell {{ c.cls }}">
-          <span class="d">{{ c.day }}</span>
-          {% if c.trades %}<span class="r">{{ "%+.1f"|format(c.r) }}R</span><i>{{c.trades}}</i>{% endif %}
-        </div>
-        {% endfor %}
-      </div>
-      {% endfor %}
-    </div>
+  <div class="card" id="calendar-card">
+    {% include "_calendar.html" %}
   </div>
   <div class="card">
     <div class="card-h">Распределение R</div>

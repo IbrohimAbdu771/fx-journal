@@ -182,7 +182,7 @@ async def dashboard(request: Request, period: str = "all", y: int | None = None,
     s = stats.compute_stats(await repository.stats_dicts(since))
     recent = await repository.list_trades(limit=12)
     open_trades = await repository.get_open_trades()
-    calendar = charts.build_calendar(s.daily, cfg.timezone, y, m)
+    calendar = await _build_calendar(y, m)
     balance = round(cfg.initial_balance + s.net_pnl, 2)
 
     return templates.TemplateResponse(
@@ -198,6 +198,23 @@ async def dashboard(request: Request, period: str = "all", y: int | None = None,
             "balance": balance,
             "period": period,
         },
+    )
+
+
+async def _build_calendar(y: int | None, m: int | None):
+    """Calendar is computed over ALL trades so month navigation always has data."""
+    from . import charts
+
+    daily = stats.compute_stats(await repository.stats_dicts()).daily
+    return charts.build_calendar(daily, cfg.timezone, y, m)
+
+
+@app.get("/calendar", response_class=HTMLResponse)
+async def calendar_fragment(request: Request, y: int | None = None, m: int | None = None,
+                            period: str = "all"):
+    calendar = await _build_calendar(y, m)
+    return templates.TemplateResponse(
+        "_calendar.html", {"request": request, "calendar": calendar, "period": period}
     )
 
 
@@ -255,6 +272,11 @@ async def edit_trade(request: Request, trade_id: int):
     merged = {**base, **data}
     enriched = service.enrich(merged, trade_time, cfg.timezone)
     enriched["trade_time"] = trade_time
+    if form.get("action") == "close":
+        enriched["status"] = "Closed"
+        if not enriched.get("outcome") and enriched.get("result_r") is not None:
+            r = enriched["result_r"]
+            enriched["outcome"] = "Win" if r > 0 else "Loss" if r < 0 else "Breakeven"
     await repository.update_trade(trade_id, enriched)
 
     before, before_mime = await _read_upload(form.get("chart_before"))

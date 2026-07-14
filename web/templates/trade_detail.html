@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block title %}Сделка #{{ trade.id }} — FX Journal{% endblock %}
-{% from "_fields.html" import sel %}
 {% block content %}
 <div class="detail-head">
   <h1>#{{ trade.id }} · {{ trade.name or '' }}</h1>
@@ -15,32 +14,27 @@
   {% if trade.has_chart_after %}<figure><figcaption>After</figcaption><img src="/chart/{{ trade.id }}/after"></figure>{% endif %}
 </div>
 
-{% if trade.status == 'Open' %}
-<form class="card close-form" method="post" action="/trade/{{ trade.id }}/close" enctype="multipart/form-data">
-  <div class="card-h">Закрыть сделку</div>
-  <div class="form-grid">
-    <label>Result R<input name="result_r" type="text" inputmode="decimal" placeholder="напр. 1.8 или -1"></label>
-    <label>Result $<input name="result_usd" type="text" inputmode="decimal"></label>
-    <label>Outcome{{ sel('outcome', ict.OUTCOMES, none) }}</label>
-    <label>Chart After<input type="file" name="chart_after" accept="image/*"></label>
-  </div>
-  <button class="btn btn-primary btn-lg btn-block" type="submit">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-    Закрыть сделку
-  </button>
-</form>
-{% endif %}
-
 <form class="card form" method="post" action="/trade/{{ trade.id }}" enctype="multipart/form-data">
-  <div class="card-h">Редактировать</div>
-  {% set show_result = trade.status != 'Open' %}
+  <div class="card-h">Параметры сделки</div>
   {% include "_fields.html" %}
-  <div class="form-grid">
+
+  <div class="form-grid" style="margin-top:14px">
     <label>Заменить Chart Before<input type="file" name="chart_before" accept="image/*"></label>
     <label>Заменить Chart After<input type="file" name="chart_after" accept="image/*"></label>
   </div>
+
+  {% include "_result_fields.html" %}
+
   <div class="form-actions">
-    <button class="btn btn-primary" type="submit">Сохранить</button>
+    {% if trade.status == 'Open' %}
+    <button class="btn btn-primary btn-lg" type="submit" name="action" value="close">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+      Закрыть сделку
+    </button>
+    <button class="btn" type="submit" name="action" value="save">Сохранить</button>
+    {% else %}
+    <button class="btn btn-primary" type="submit" name="action" value="save">Сохранить</button>
+    {% endif %}
     <a class="btn" href="/">На дашборд</a>
   </div>
 </form>
