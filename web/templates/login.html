@@ -20,8 +20,25 @@
     <img src="/static/logo.svg" alt="" style="width:54px;height:54px;margin:0 auto 4px">
     <h1 style="font-family:var(--font-display)">FX Journal</h1>
     {% if error %}<div class="err">{{ error }}</div>{% endif %}
-    <input type="password" name="password" placeholder="Пароль" autofocus>
+    <div class="pw-wrap">
+      <input type="password" name="password" id="pw" placeholder="Пароль" autofocus autocomplete="current-password">
+      <button type="button" class="pw-toggle" id="pwToggle" aria-label="Показать пароль">
+        <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9.9 4.2A9.8 9.8 0 0 1 12 4c6.4 0 10 8 10 8a17 17 0 0 1-2.2 3.1M6.6 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.8 9.8 0 0 0 4.1-.9"/><path d="m4 4 16 16"/></svg>
+      </button>
+    </div>
     <button class="btn btn-primary" type="submit" style="justify-content:center">Войти</button>
   </form>
+  <script>
+    (function () {
+      var pw = document.getElementById("pw"), t = document.getElementById("pwToggle");
+      t.addEventListener("click", function () {
+        var show = pw.type === "password";
+        pw.type = show ? "text" : "password";
+        t.classList.toggle("show", show);
+        pw.focus();
+      });
+    })();
+  </script>
 </body>
 </html>

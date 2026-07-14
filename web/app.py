@@ -100,13 +100,21 @@ async def health():
     return {"ok": True}
 
 
+def _clean_pw(s: str | None) -> str:
+    return (s or "").strip().strip('"').strip("'")
+
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_form(request: Request):
+    if not cfg.web_password:  # no gate configured — nothing to log into
+        return RedirectResponse("/", status_code=302)
     return templates.TemplateResponse("login.html", {"request": request, "error": None})
 
 
 @app.post("/login")
 async def login(request: Request, password: str = Form("")):
+    if not cfg.web_password:
+        return RedirectResponse("/", status_code=302)
     ip = request.client.host if request.client else "?"
     if _login_blocked(ip):
         return templates.TemplateResponse(
@@ -114,7 +122,7 @@ async def login(request: Request, password: str = Form("")):
             {"request": request, "error": "Слишком много попыток. Подождите 5 минут."},
             status_code=429,
         )
-    if password == cfg.web_password:
+    if _clean_pw(password) == _clean_pw(cfg.web_password):
         request.session["auth"] = True
         return RedirectResponse("/", status_code=302)
     _login_hits[ip].append(time.time())
