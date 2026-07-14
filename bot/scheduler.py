@@ -14,6 +14,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from core import repository, stats
 from core.ict import now_ny
+from . import news
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,17 @@ def start_scheduler(cfg, bot, parser) -> AsyncIOScheduler:
                 day_of_week="mon-fri", hour=hour, minute=minute, id=f"{name}_{kind}",
             )
         logger.info("Session alerts on (display tz: %s)", cfg.notify_timezone)
+
+    async def news_job():
+        try:
+            text = await news.daily_news_text(cfg.notify_timezone)
+            await bot.send_message(cfg.allowed_user_id, text, parse_mode="HTML")
+            logger.info("Daily news sent")
+        except Exception as exc:  # pragma: no cover - network path
+            logger.exception("News job failed: %s", exc)
+
+    scheduler.add_job(news_job, "cron", hour=10, minute=0,
+                      timezone=cfg.notify_timezone, id="news_daily")
 
     scheduler.start()
     logger.info("Scheduler started (weekly Sun 20:00 %s)", cfg.timezone)

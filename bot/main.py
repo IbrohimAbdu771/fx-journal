@@ -18,12 +18,15 @@ from aiogram.filters import Command
 from aiogram.types import (
     BotCommand,
     BufferedInputFile,
+    KeyboardButton,
     LinkPreviewOptions,
     Message,
+    ReplyKeyboardMarkup,
 )
 
 from core import repository, service, stats
 from core.ict import now_ny
+from . import news
 from .parser import TradeParser
 from .transcribe import TranscriptionError, transcribe_ogg
 
@@ -31,6 +34,12 @@ logger = logging.getLogger(__name__)
 
 IMAGE_TTL = 300  # seconds a stashed chart waits for its description
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
+NEWS_BTN = "📰 Новости дня"
+MAIN_KB = ReplyKeyboardMarkup(
+    keyboard=[[KeyboardButton(text=NEWS_BTN)]],
+    resize_keyboard=True,
+    is_persistent=True,
+)
 
 
 def _v(x, nd: int | None = None) -> str | None:
@@ -261,8 +270,9 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
             "• <b>Новая сделка</b> — фото графика с подписью, или фото + голосовое\n"
             "• <b>Закрытие</b> — «закрыл EURUSD +1.8R» (можно скрин после)\n"
             "• <b>Правка</b> — «исправь: стоп был 1.0832»\n\n"
-            "Команды: /stats · /last · /open",
+            "Команды: /stats · /last · /open · /news",
             parse_mode="HTML",
+            reply_markup=MAIN_KB,
         )
 
     @router.message(Command("stats"))
@@ -291,6 +301,22 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
             return
         text = "\n\n".join(format_trade_card(t, "🟢 Открыта") for t in opens)
         await _card(message, text)
+
+    async def _send_news(message: Message):
+        try:
+            text = await news.daily_news_text(cfg.notify_timezone)
+        except Exception as exc:  # pragma: no cover - network path
+            logger.exception("News fetch failed: %s", exc)
+            text = "Не удалось загрузить новости (Forex Factory недоступен). Попробуй позже."
+        await message.answer(text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
+
+    @router.message(Command("news"))
+    async def cmd_news(message: Message):
+        await _send_news(message)
+
+    @router.message(F.text == NEWS_BTN)
+    async def btn_news(message: Message):
+        await _send_news(message)
 
     @router.message(F.photo)
     async def on_photo(message: Message):
@@ -321,6 +347,7 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
 
 BOT_COMMANDS = [
     BotCommand(command="start", description="Меню и помощь"),
+    BotCommand(command="news", description="Новости дня (FF)"),
     BotCommand(command="stats", description="Статистика · /stats month"),
     BotCommand(command="last", description="Последняя сделка"),
     BotCommand(command="open", description="Открытые позиции"),
