@@ -85,6 +85,8 @@ class Config:
     # account / locale
     initial_balance: float
     timezone: str
+    notify_timezone: str
+    session_alerts: bool
 
 
 def load_config() -> Config:
@@ -115,4 +117,6 @@ def load_config() -> Config:
         web_password=_get("WEB_PASSWORD"),
         initial_balance=initial_balance,
         timezone=_get("TRADER_TIMEZONE", "America/New_York"),
+        notify_timezone=_get("NOTIFY_TIMEZONE", "Asia/Tashkent"),
+        session_alerts=_get("SESSION_ALERTS", "1") != "0",
     )
