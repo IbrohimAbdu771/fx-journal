@@ -60,11 +60,15 @@ a{color:inherit;text-decoration:none}
 .nav-link.active{color:var(--ink);background:rgba(39,227,154,.14)}
 .nav-link.bt.active{background:rgba(231,194,129,.16);color:var(--gold)}
 
-/* backtest mode indicator */
-.bt-ribbon{max-width:1220px;margin:14px auto 0;padding:9px 18px;border-radius:12px;
-  font-family:var(--font-mono);font-size:12px;letter-spacing:.03em;color:var(--gold);
-  background:rgba(231,194,129,.07);border:1px solid rgba(231,194,129,.28)}
-.bt-ribbon b{color:var(--gold)}
+/* backtest mode indicator — compact gold pill */
+.bt-ribbon-wrap{max-width:1220px;margin:18px auto -2px;padding:0 22px}
+.bt-ribbon{display:inline-flex;align-items:center;gap:9px;padding:7px 15px;border-radius:999px;
+  font-family:var(--font-mono);font-size:12px;font-weight:600;letter-spacing:.1em;color:var(--gold);
+  background:rgba(231,194,129,.09);border:1px solid rgba(231,194,129,.34);
+  box-shadow:0 6px 20px -12px rgba(231,194,129,.5)}
+.bt-ribbon .flask{width:15px;height:15px;flex:none;stroke-linecap:round;stroke-linejoin:round}
+.bt-ribbon em{font-style:normal;font-family:var(--font-body);font-weight:500;letter-spacing:0;
+  text-transform:none;font-size:12.5px;color:var(--muted)}
 .tab.bt.active{color:#221a08;background:linear-gradient(180deg,var(--gold),var(--gold-2))}
 body.mode-backtest .glow-emerald{opacity:.25}
 body.mode-backtest .glow-gold{opacity:.45}
@@ -104,7 +108,8 @@ h1{font-family:var(--font-display);font-size:24px;font-weight:700;letter-spacing
 /* ---- period tabs ---- */
 .tabs{display:inline-flex;gap:3px;margin-bottom:20px;padding:4px;border-radius:13px;
   background:var(--panel);border:1px solid var(--line);backdrop-filter:blur(10px)}
-.tab{padding:7px 15px;border-radius:9px;color:var(--muted);font-weight:600;font-size:13.5px;transition:.2s var(--ease)}
+.tab{display:inline-flex;align-items:center;gap:7px;padding:7px 15px;border-radius:9px;color:var(--muted);font-weight:600;font-size:13.5px;transition:.2s var(--ease)}
+.tab svg{width:14px;height:14px;stroke-linecap:round;stroke-linejoin:round}
 .tab:hover{color:var(--ink)}
 .tab.active{color:var(--emerald-ink);background:linear-gradient(180deg,var(--emerald),var(--emerald-2))}
 

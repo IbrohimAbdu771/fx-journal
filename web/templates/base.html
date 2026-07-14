@@ -45,7 +45,13 @@
   </header>
 
   {% if mode == 'backtest' %}
-  <div class="bt-ribbon">🧪 <b>BACKTEST</b> — тестовый журнал, отдельный от лайва</div>
+  <div class="bt-ribbon-wrap">
+    <span class="bt-ribbon">
+      <svg class="flask" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 3h6M10 3v6l-5.2 9.3A2 2 0 0 0 6.6 21h10.8a2 2 0 0 0 1.8-2.7L14 9V3"/><path d="M7.5 15h9"/></svg>
+      BACKTEST
+      <em>тестовый журнал, отдельный от лайва</em>
+    </span>
+  </div>
   {% endif %}
 
   <main class="container">
