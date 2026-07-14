@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Сделки — FX Journal{% endblock %}
+{% block content %}
+<h1>Журнал сделок</h1>
+<div class="card">
+  <table class="log">
+    <tr><th>#</th><th>Дата</th><th>Пара</th><th>Напр.</th><th>Entry</th><th>SL</th><th>TP</th>
+        <th>RR</th><th>Сессия</th><th>Сетап</th><th>OTE</th><th>Итог</th><th>R</th><th>$</th><th>План</th><th></th></tr>
+    {% for t in trades %}
+    <tr>
+      <td>{{ t.id }}</td>
+      <td>{{ t.trade_time.strftime('%d.%m %H:%M') if t.trade_time else '' }}</td>
+      <td>{{ t.pair or '—' }}</td><td>{{ t.direction or '' }}</td>
+      <td>{{ t.entry or '' }}</td><td>{{ t.stop_loss or '' }}</td><td>{{ t.take_profit or '' }}</td>
+      <td>{{ t.rr_planned or '' }}</td><td>{{ t.session or '' }}</td><td>{{ t.setup or '' }}</td><td>{{ t.ote_level or '' }}</td>
+      <td><span class="badge {{ t.status|lower }}">{{ t.outcome or t.status }}</span></td>
+      <td class="{{ 'pos' if (t.result_r or 0)>=0 else 'neg' }}">{{ "%+.2f"|format(t.result_r) if t.result_r is not none else '' }}</td>
+      <td class="{{ 'pos' if (t.result_usd or 0)>=0 else 'neg' }}">{{ "%+.2f"|format(t.result_usd) if t.result_usd is not none else '' }}</td>
+      <td>{{ t.plan_followed or '' }}</td>
+      <td><a href="/trade/{{ t.id }}">→</a></td>
+    </tr>
+    {% endfor %}
+    {% if not trades %}<tr><td colspan="16" class="empty">Пусто. <a href="/new">Добавить сделку</a></td></tr>{% endif %}
+  </table>
+</div>
+{% endblock %}

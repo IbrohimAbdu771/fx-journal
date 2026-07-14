@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}FX Journal{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">📓 FX&nbsp;Journal</a>
+    <nav>
+      <a href="/">Дашборд</a>
+      <a href="/trades">Сделки</a>
+      <a class="btn-primary" href="/new">+ Сделка</a>
+    </nav>
+  </header>
+  <main class="container">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="foot">R-based ICT journal · <a href="/logout">выход</a></footer>
+</body>
+</html>

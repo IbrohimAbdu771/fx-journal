@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Сделка #{{ trade.id }} — FX Journal{% endblock %}
+{% from "_fields.html" import sel %}
+{% block content %}
+<div class="detail-head">
+  <h1>#{{ trade.id }} · {{ trade.name or '' }}</h1>
+  <span class="badge {{ trade.status|lower }}">{{ trade.outcome or trade.status }}</span>
+  {% if trade.result_r is not none %}
+  <span class="big {{ 'pos' if trade.result_r>=0 else 'neg' }}">{{ "%+.2f"|format(trade.result_r) }}R</span>
+  {% endif %}
+</div>
+
+<div class="charts">
+  {% if trade.has_chart_before %}<figure><figcaption>Before</figcaption><img src="/chart/{{ trade.id }}/before"></figure>{% endif %}
+  {% if trade.has_chart_after %}<figure><figcaption>After</figcaption><img src="/chart/{{ trade.id }}/after"></figure>{% endif %}
+</div>
+
+{% if trade.status == 'Open' %}
+<form class="card close-form" method="post" action="/trade/{{ trade.id }}/close" enctype="multipart/form-data">
+  <div class="card-h">🔒 Закрыть сделку</div>
+  <div class="form-grid">
+    <label>Result R<input name="result_r" type="text" inputmode="decimal" placeholder="напр. 1.8 или -1"></label>
+    <label>Result $<input name="result_usd" type="text" inputmode="decimal"></label>
+    <label>Outcome{{ sel('outcome', ict.OUTCOMES, none) }}</label>
+    <label>Chart After<input type="file" name="chart_after" accept="image/*"></label>
+  </div>
+  <button class="btn-primary" type="submit">Закрыть</button>
+</form>
+{% endif %}
+
+<form class="card form" method="post" action="/trade/{{ trade.id }}" enctype="multipart/form-data">
+  <div class="card-h">Редактировать</div>
+  {% include "_fields.html" %}
+  <div class="form-grid">
+    <label>Заменить Chart Before<input type="file" name="chart_before" accept="image/*"></label>
+    <label>Заменить Chart After<input type="file" name="chart_after" accept="image/*"></label>
+  </div>
+  <div class="form-actions">
+    <button class="btn-primary" type="submit">Сохранить</button>
+    <a class="btn" href="/">На дашборд</a>
+  </div>
+</form>
+
+<form method="post" action="/trade/{{ trade.id }}/delete" onsubmit="return confirm('Удалить сделку #{{ trade.id }}?')">
+  <button class="btn-danger" type="submit">Удалить</button>
+</form>
+{% endblock %}

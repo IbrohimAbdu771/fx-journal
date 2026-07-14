@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Новая сделка — FX Journal{% endblock %}
+{% from "_fields.html" import sel %}
+{% block content %}
+<h1>Новая сделка</h1>
+<form class="card form" method="post" action="{{ action }}" enctype="multipart/form-data">
+  {% include "_fields.html" %}
+  <label class="wide">График при входе (Chart Before)
+    <input type="file" name="chart_before" accept="image/*">
+  </label>
+  <div class="form-actions">
+    <button class="btn-primary" type="submit">Сохранить</button>
+    <a class="btn" href="/">Отмена</a>
+  </div>
+</form>
+{% endblock %}

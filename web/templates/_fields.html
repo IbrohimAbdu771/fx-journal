@@ -1,0 +1,53 @@
+{# Reusable trade fields. Expects: trade (dict|None), default_time (str) #}
+{% macro sel(name, options, current, blank='—') %}
+<select name="{{ name }}">
+  <option value="">{{ blank }}</option>
+  {% for o in options %}
+  <option value="{{ o }}" {{ 'selected' if current==o }}>{{ o }}</option>
+  {% endfor %}
+</select>
+{% endmacro %}
+
+{% set t = trade or {} %}
+<div class="form-grid">
+  <label>Время сделки<input type="datetime-local" name="trade_time" value="{{ default_time }}"></label>
+  <label>Пара{{ sel('pair', ict.PAIRS, t.get('pair')) }}</label>
+  <label>Направление{{ sel('direction', ict.DIRECTIONS, t.get('direction')) }}</label>
+  <label>Статус{{ sel('status', ict.STATUSES, t.get('status') or 'Open') }}</label>
+
+  <label>Entry<input name="entry" type="text" inputmode="decimal" value="{{ t.get('entry') if t.get('entry') is not none else '' }}"></label>
+  <label>Stop Loss<input name="stop_loss" type="text" inputmode="decimal" value="{{ t.get('stop_loss') if t.get('stop_loss') is not none else '' }}"></label>
+  <label>Take Profit<input name="take_profit" type="text" inputmode="decimal" value="{{ t.get('take_profit') if t.get('take_profit') is not none else '' }}"></label>
+  <label>Lot<input name="lot" type="text" inputmode="decimal" value="{{ t.get('lot') if t.get('lot') is not none else '' }}"></label>
+  <label>Risk %<input name="risk_pct" type="text" inputmode="decimal" value="{{ t.get('risk_pct') if t.get('risk_pct') is not none else '' }}"></label>
+
+  <label>Session{{ sel('session', ict.SESSIONS, t.get('session')) }}</label>
+  <label>Asia type{{ sel('asia_type', ict.ASIA_TYPES, t.get('asia_type')) }}</label>
+  <label>Setup{{ sel('setup', ict.SETUPS, t.get('setup')) }}</label>
+  <label>Sweep ref{{ sel('sweep_reference', ict.SWEEP_REFS, t.get('sweep_reference')) }}</label>
+  <label>OTE level{{ sel('ote_level', ict.OTE_LEVELS, t.get('ote_level')) }}</label>
+
+  <label class="chk"><input type="checkbox" name="sb_window" {{ 'checked' if t.get('sb_window') }}> Silver Bullet</label>
+  <label class="chk"><input type="checkbox" name="mss_confirmed" {{ 'checked' if t.get('mss_confirmed') }}> MSS confirmed</label>
+  <label class="chk"><input type="checkbox" name="news_blackout" {{ 'checked' if t.get('news_blackout') }}> News blackout</label>
+
+  <label>Outcome{{ sel('outcome', ict.OUTCOMES, t.get('outcome')) }}</label>
+  <label>Result R<input name="result_r" type="text" inputmode="decimal" value="{{ t.get('result_r') if t.get('result_r') is not none else '' }}"></label>
+  <label>Result $<input name="result_usd" type="text" inputmode="decimal" value="{{ t.get('result_usd') if t.get('result_usd') is not none else '' }}"></label>
+
+  <label>План{{ sel('plan_followed', ict.PLAN_FOLLOWED, t.get('plan_followed')) }}</label>
+  <label>Эмоция{{ sel('emotion', ict.EMOTIONS, t.get('emotion')) }}</label>
+</div>
+
+<label class="wide">Нарушения
+  <div class="multi">
+    {% for v in ict.VIOLATION_TYPES %}
+    <label class="chk"><input type="checkbox" name="violation_type" value="{{ v }}"
+      {{ 'checked' if v in (t.get('violation_type') or []) }}> {{ v }}</label>
+    {% endfor %}
+  </div>
+</label>
+
+<label class="wide">Заметки / ошибки
+  <textarea name="notes" rows="3">{{ t.get('notes') or '' }}</textarea>
+</label>
