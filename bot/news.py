@@ -38,10 +38,11 @@ async def fetch_calendar(timeout: float = 20.0) -> list[dict]:
         return resp.json()
 
 
-def events_for_day(items: list[dict], tz: str, day: date | None = None) -> list[dict]:
+def events_for_day(items: list[dict], tz: str, day: date | None = None,
+                   impacts: set[str] | None = None) -> list[dict]:
     tzinfo = ZoneInfo(tz)
     day = day or datetime.now(tzinfo).date()
-    allowed = _allowed_impacts()
+    allowed = impacts if impacts is not None else _allowed_impacts()
     out: list[dict] = []
     for it in items:
         if it.get("country") not in CURRENCIES:

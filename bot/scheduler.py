@@ -6,6 +6,7 @@ user's local (Tashkent) time.
 """
 from __future__ import annotations
 
+import html
 import logging
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -92,6 +93,57 @@ async def session_alert(cfg, bot, name: str, kind: str) -> None:
         logger.exception("Session alert failed: %s", exc)
 
 
+async def release_alert(cfg, bot, ev: dict) -> None:
+    """Fire when a red (High-impact) USD/EUR/GBP event is released."""
+    flag = news.CCY_FLAG.get(ev["ccy"], "")
+    tzlabel = cfg.notify_timezone.split("/")[-1]
+    t = ev["dt"].strftime("%H:%M")
+    lines = [
+        f"🔴 <b>{html.escape(ev['ccy'])} · {html.escape(ev['title'])}</b> {flag}",
+        f"🗞 Красная новость вышла · {t} ({tzlabel})",
+    ]
+    det = []
+    if ev["forecast"]:
+        det.append(f"прогноз <b>{html.escape(ev['forecast'])}</b>")
+    if ev["previous"]:
+        det.append(f"пред. {html.escape(ev['previous'])}")
+    if det:
+        lines.append("📊 " + " · ".join(det))
+    lines.append("\nПроверь фактическое (Actual) на графике · вход только по модели.")
+    try:
+        await bot.send_message(cfg.allowed_user_id, "\n".join(lines), parse_mode="HTML")
+        logger.info("Release alert sent: %s %s", ev["ccy"], ev["title"])
+    except Exception as exc:  # pragma: no cover - network path
+        logger.exception("Release alert failed: %s", exc)
+
+
+async def schedule_red_releases(scheduler, cfg, bot) -> None:
+    """(Re)schedule one-off alerts for today's remaining red USD/EUR/GBP events."""
+    try:
+        items = await news.fetch_calendar()
+    except Exception as exc:  # pragma: no cover - network path
+        logger.exception("Release planner fetch failed: %s", exc)
+        return
+    now = datetime.now(ZoneInfo(cfg.notify_timezone))
+    events = news.events_for_day(items, cfg.notify_timezone, now.date(), impacts={"High"})
+
+    for job in list(scheduler.get_jobs()):
+        if job.id.startswith("rel_"):
+            scheduler.remove_job(job.id)
+
+    scheduled = 0
+    for i, ev in enumerate(events):
+        if ev["dt"] <= now:  # already released today
+            continue
+        scheduler.add_job(
+            release_alert, "date", run_date=ev["dt"], args=[cfg, bot, ev],
+            id=f"rel_{i}_{ev['dt'].strftime('%H%M')}", replace_existing=True,
+            misfire_grace_time=300,
+        )
+        scheduled += 1
+    logger.info("Red-news releases scheduled today: %d", scheduled)
+
+
 def start_scheduler(cfg, bot, parser) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=cfg.timezone)
 
@@ -112,6 +164,16 @@ def start_scheduler(cfg, bot, parser) -> AsyncIOScheduler:
                 day_of_week="mon-fri", hour=hour, minute=minute, id=f"{name}_{kind}",
             )
         logger.info("Session alerts on (display tz: %s)", cfg.notify_timezone)
+
+        async def release_planner():
+            await schedule_red_releases(scheduler, cfg, bot)
+
+        # plan today's red releases right after start, then refresh every 6h
+        scheduler.add_job(
+            release_planner, "interval", hours=6,
+            next_run_time=datetime.now(ZoneInfo(cfg.timezone)) + timedelta(seconds=10),
+            id="release_planner",
+        )
 
     async def news_job():
         try:
