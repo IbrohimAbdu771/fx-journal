@@ -72,6 +72,7 @@ def build_calendar(daily: list[dict], tz: str, year: int | None = None, month: i
 
     weeks: list[list[dict]] = []
     month_r = 0.0
+    month_usd = 0.0
     month_trades = 0
     for week in _cal.Calendar(firstweekday=0).monthdatescalendar(year, month):
         row = []
@@ -85,6 +86,7 @@ def build_calendar(daily: list[dict], tz: str, year: int | None = None, month: i
                 trades = info["trades"]
                 cls = "win" if r > 0 else "loss" if r < 0 else "be"
                 month_r += r
+                month_usd += info.get("usd", 0)
                 month_trades += trades
             row.append(
                 {"day": day.day, "date": day.isoformat(), "in_month": in_month,
@@ -96,6 +98,7 @@ def build_calendar(daily: list[dict], tz: str, year: int | None = None, month: i
         "weekdays": WEEKDAYS_RU,
         "weeks": weeks,
         "month_r": round(month_r, 2),
+        "month_usd": round(month_usd, 2),
         "month_trades": month_trades,
         "year": year,
         "month": month,
