@@ -57,6 +57,17 @@ a{color:inherit;text-decoration:none}
   font-weight:600;font-size:14px;transition:color .2s var(--ease),background .2s var(--ease)}
 .nav-link svg{width:17px;height:17px;stroke-linecap:round;stroke-linejoin:round}
 .nav-link:hover{color:var(--ink);background:rgba(255,255,255,.05)}
+.nav-link.active{color:var(--ink);background:rgba(39,227,154,.14)}
+.nav-link.bt.active{background:rgba(231,194,129,.16);color:var(--gold)}
+
+/* backtest mode indicator */
+.bt-ribbon{max-width:1220px;margin:14px auto 0;padding:9px 18px;border-radius:12px;
+  font-family:var(--font-mono);font-size:12px;letter-spacing:.03em;color:var(--gold);
+  background:rgba(231,194,129,.07);border:1px solid rgba(231,194,129,.28)}
+.bt-ribbon b{color:var(--gold)}
+.tab.bt.active{color:#221a08;background:linear-gradient(180deg,var(--gold),var(--gold-2))}
+body.mode-backtest .glow-emerald{opacity:.25}
+body.mode-backtest .glow-gold{opacity:.45}
 
 /* ---- buttons ---- */
 .btn{display:inline-flex;align-items:center;gap:7px;padding:9px 15px;border-radius:11px;

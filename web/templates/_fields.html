@@ -14,6 +14,13 @@
   <label>Пара{{ sel('pair', ict.PAIRS, t.get('pair')) }}</label>
   <label>Направление{{ sel('direction', ict.DIRECTIONS, t.get('direction')) }}</label>
   <label>Статус{{ sel('status', ict.STATUSES, t.get('status') or 'Open') }}</label>
+  {% set cur_mode = t.get('mode') or mode|default('live') %}
+  <label>Режим
+    <select name="mode">
+      <option value="live" {{ 'selected' if cur_mode=='live' }}>🟢 Live</option>
+      <option value="backtest" {{ 'selected' if cur_mode=='backtest' }}>🧪 Backtest</option>
+    </select>
+  </label>
 
   <label>Entry<input name="entry" type="text" inputmode="decimal" value="{{ t.get('entry') if t.get('entry') is not none else '' }}"></label>
   <label>Stop Loss<input name="stop_loss" type="text" inputmode="decimal" value="{{ t.get('stop_loss') if t.get('stop_loss') is not none else '' }}"></label>

@@ -142,6 +142,7 @@ async def _form_to_data(form) -> dict:
         "result_usd": _f(form.get("result_usd")),
         "outcome": _s(form.get("outcome")),
         "status": _s(form.get("status")),
+        "mode": _s(form.get("mode")) or "live",
         "session": _s(form.get("session")),
         "sb_window": form.get("sb_window") == "on",
         "asia_type": _s(form.get("asia_type")),
@@ -174,16 +175,23 @@ def _since(period: str) -> datetime | None:
             "year": now - timedelta(days=365)}.get(period)
 
 
+def _norm_mode(mode: str | None) -> str:
+    return "backtest" if mode == "backtest" else "live"
+
+
 @app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request, period: str = "all", y: int | None = None, m: int | None = None):
+async def dashboard(request: Request, period: str = "all", y: int | None = None,
+                    m: int | None = None, mode: str = "live"):
     from . import charts
 
+    mode = _norm_mode(mode)
     since = _since(period)
-    s = stats.compute_stats(await repository.stats_dicts(since))
-    recent = await repository.list_trades(limit=12)
-    open_trades = await repository.get_open_trades()
-    calendar = await _build_calendar(y, m)
-    balance = round(cfg.initial_balance + s.net_pnl, 2)
+    s = stats.compute_stats(await repository.stats_dicts(since, mode))
+    recent = await repository.list_trades(limit=12, mode=mode)
+    open_trades = await repository.get_open_trades(mode)
+    calendar = await _build_calendar(y, m, mode)
+    base_balance = cfg.initial_balance if mode == "live" else 0.0
+    balance = round(base_balance + s.net_pnl, 2)
 
     return templates.TemplateResponse(
         "dashboard.html",
@@ -197,41 +205,47 @@ async def dashboard(request: Request, period: str = "all", y: int | None = None,
             "calendar": calendar,
             "balance": balance,
             "period": period,
+            "mode": mode,
         },
     )
 
 
-async def _build_calendar(y: int | None, m: int | None):
-    """Calendar is computed over ALL trades so month navigation always has data."""
+async def _build_calendar(y: int | None, m: int | None, mode: str = "live"):
+    """Calendar is computed over all trades in the mode so month nav always has data."""
     from . import charts
 
-    daily = stats.compute_stats(await repository.stats_dicts()).daily
+    daily = stats.compute_stats(await repository.stats_dicts(mode=mode)).daily
     return charts.build_calendar(daily, cfg.timezone, y, m)
 
 
 @app.get("/calendar", response_class=HTMLResponse)
 async def calendar_fragment(request: Request, y: int | None = None, m: int | None = None,
-                            period: str = "all"):
-    calendar = await _build_calendar(y, m)
+                            period: str = "all", mode: str = "live"):
+    mode = _norm_mode(mode)
+    calendar = await _build_calendar(y, m, mode)
     return templates.TemplateResponse(
-        "_calendar.html", {"request": request, "calendar": calendar, "period": period}
+        "_calendar.html",
+        {"request": request, "calendar": calendar, "period": period, "mode": mode},
     )
 
 
 @app.get("/trades", response_class=HTMLResponse)
-async def trades_log(request: Request):
-    trades = await repository.list_trades(limit=500)
+async def trades_log(request: Request, mode: str = "live"):
+    mode = _norm_mode(mode)
+    trades = await repository.list_trades(limit=500, mode=mode)
     return templates.TemplateResponse(
-        "trades.html", {"request": request, "trades": trades}
+        "trades.html", {"request": request, "trades": trades, "mode": mode}
     )
 
 
 @app.get("/new", response_class=HTMLResponse)
-async def new_form(request: Request):
+async def new_form(request: Request, mode: str = "live"):
+    mode = _norm_mode(mode)
     default_time = ict.now_ny(cfg.timezone).strftime("%Y-%m-%dT%H:%M")
     return templates.TemplateResponse(
         "trade_form.html",
-        {"request": request, "trade": None, "default_time": default_time, "action": "/trades"},
+        {"request": request, "trade": None, "default_time": default_time,
+         "action": "/trades", "mode": mode},
     )
 
 
@@ -257,7 +271,8 @@ async def trade_detail(request: Request, trade_id: int):
     default_time = tt.astimezone(ZoneInfo(cfg.timezone)).strftime("%Y-%m-%dT%H:%M") if tt else ""
     return templates.TemplateResponse(
         "trade_detail.html",
-        {"request": request, "trade": trade, "default_time": default_time},
+        {"request": request, "trade": trade, "default_time": default_time,
+         "mode": trade.get("mode", "live")},
     )
 
 
@@ -319,6 +334,6 @@ async def chart(trade_id: int, which: str):
 
 
 @app.get("/api/stats")
-async def api_stats(period: str = "all"):
-    s = stats.compute_stats(await repository.stats_dicts(_since(period)))
+async def api_stats(period: str = "all", mode: str = "live"):
+    s = stats.compute_stats(await repository.stats_dicts(_since(period), _norm_mode(mode)))
     return s.as_dict()

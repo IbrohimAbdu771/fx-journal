@@ -1,7 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Сделки — FX Journal{% endblock %}
+{% block title %}Сделки {{ 'Backtest' if mode=='backtest' else 'Лайв' }} — FX Journal{% endblock %}
 {% block content %}
 <h1>Журнал сделок</h1>
+<div class="tabs">
+  <a class="tab {{ 'active' if mode=='live' }}" href="/trades?mode=live">🟢 Лайв</a>
+  <a class="tab bt {{ 'active' if mode=='backtest' }}" href="/trades?mode=backtest">🧪 Backtest</a>
+</div>
 <div class="card">
   <table class="log">
     <tr><th>#</th><th>Дата</th><th>Пара</th><th>Напр.</th><th>Entry</th><th>SL</th><th>TP</th>
@@ -20,7 +24,9 @@
       <td class="go">›</td>
     </tr>
     {% endfor %}
-    {% if not trades %}<tr><td colspan="16" class="empty">Пусто. <a href="/new">Добавить сделку →</a></td></tr>{% endif %}
+    {% if not trades %}<tr><td colspan="16" class="empty">
+      {{ 'В бэктесте' if mode=='backtest' else 'В лайве' }} пока пусто.
+      <a href="/new?mode={{mode}}">Добавить сделку →</a></td></tr>{% endif %}
   </table>
 </div>
 {% endblock %}

@@ -9,7 +9,8 @@
     var card = document.getElementById("calendar-card");
     if (!card) return;
     var q = "/calendar?y=" + nav.dataset.y + "&m=" + nav.dataset.m +
-            "&period=" + (nav.dataset.period || "all");
+            "&period=" + (nav.dataset.period || "all") +
+            "&mode=" + (nav.dataset.mode || "live");
     card.classList.add("loading");
     try {
       var res = await fetch(q, { headers: { "X-Requested-With": "fetch" } });

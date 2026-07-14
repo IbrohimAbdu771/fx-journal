@@ -1,19 +1,20 @@
-{# Calendar card inner content. Expects: calendar, period. Swapped via AJAX. #}
+{# Calendar card inner content. Expects: calendar, period, mode. Swapped via AJAX. #}
+{% set mode = mode|default('live') %}
 {% set prev_y = calendar.year if calendar.month>1 else calendar.year-1 %}
 {% set prev_m = calendar.month-1 if calendar.month>1 else 12 %}
 {% set next_y = calendar.year if calendar.month<12 else calendar.year+1 %}
 {% set next_m = calendar.month+1 if calendar.month<12 else 1 %}
 <div class="card-h">
-  <a class="navlink cal-nav" data-period="{{period}}" data-y="{{prev_y}}" data-m="{{prev_m}}"
-     href="/?period={{period}}&y={{prev_y}}&m={{prev_m}}" aria-label="Предыдущий месяц">‹</a>
+  <a class="navlink cal-nav" data-period="{{period}}" data-mode="{{mode}}" data-y="{{prev_y}}" data-m="{{prev_m}}"
+     href="/?period={{period}}&mode={{mode}}&y={{prev_y}}&m={{prev_m}}" aria-label="Предыдущий месяц">‹</a>
   {{ calendar.label }}
   <span class="month-r">
     <span class="{{ 'pos' if calendar.month_r>=0 else 'neg' }}">{{ "%+.2f"|format(calendar.month_r) }}R</span>
     <span class="{{ 'pos' if calendar.month_usd>=0 else 'neg' }}">{{ "%+.0f"|format(calendar.month_usd) }}$</span>
     <span class="mut">· {{ calendar.month_trades }}</span>
   </span>
-  <a class="navlink cal-nav" data-period="{{period}}" data-y="{{next_y}}" data-m="{{next_m}}"
-     href="/?period={{period}}&y={{next_y}}&m={{next_m}}" aria-label="Следующий месяц">›</a>
+  <a class="navlink cal-nav" data-period="{{period}}" data-mode="{{mode}}" data-y="{{next_y}}" data-m="{{next_m}}"
+     href="/?period={{period}}&mode={{mode}}&y={{next_y}}&m={{next_m}}" aria-label="Следующий месяц">›</a>
 </div>
 <div class="cal">
   <div class="cal-row cal-head">{% for wd in calendar.weekdays %}<div>{{wd}}</div>{% endfor %}</div>

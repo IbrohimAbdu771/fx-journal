@@ -35,11 +35,20 @@ logger = logging.getLogger(__name__)
 IMAGE_TTL = 300  # seconds a stashed chart waits for its description
 NO_PREVIEW = LinkPreviewOptions(is_disabled=True)
 NEWS_BTN = "📰 Новости дня"
+LIVE_BTN = "🟢 Live"
+BT_BTN = "🧪 Backtest"
 MAIN_KB = ReplyKeyboardMarkup(
-    keyboard=[[KeyboardButton(text=NEWS_BTN)]],
+    keyboard=[
+        [KeyboardButton(text=LIVE_BTN), KeyboardButton(text=BT_BTN)],
+        [KeyboardButton(text=NEWS_BTN)],
+    ],
     resize_keyboard=True,
     is_persistent=True,
 )
+
+
+def _mode_title(base: str, mode: str) -> str:
+    return f"{base} · 🧪 BACKTEST" if mode == "backtest" else base
 
 
 def _v(x, nd: int | None = None) -> str | None:
@@ -163,28 +172,34 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
     async def _card(message: Message, text: str):
         await message.answer(text, parse_mode="HTML", link_preview_options=NO_PREVIEW)
 
+    async def _mode(uid: int) -> str:
+        return await repository.get_setting(f"mode:{uid}", "live")
+
     async def _download(message: Message, file) -> bytes:
         buf = await message.bot.download(file)
         return buf.read()
 
     async def _reply_new(message: Message, data: dict, image: bytes | None, mime: str):
+        uid = message.from_user.id
+        mode = await _mode(uid)
         trade_time = now_ny(cfg.timezone)
         enriched = service.enrich(data, trade_time, cfg.timezone)
+        enriched["mode"] = mode
         enriched["raw_message"] = data.get("raw_message")
         trade = await repository.add_trade(
             enriched, chart_before=image, chart_before_mime=mime if image else None
         )
-        uid = message.from_user.id
         missing = service.missing_critical(enriched)
-        text = format_trade_card(trade) + _link(trade["id"])
+        text = format_trade_card(trade, _mode_title("✅ Сделка записана", mode)) + _link(trade["id"])
         if missing:
             pending_clarify[uid] = trade["id"]
             text += f"\n\n❓ Не хватает: <b>{', '.join(missing)}</b>. Ответь одним сообщением — допишу."
         await _card(message, text)
 
     async def _reply_close(message: Message, data: dict, image: bytes | None, mime: str):
+        mode = await _mode(message.from_user.id)
         pair = data.get("pair")
-        target = await repository.find_last_open(pair)
+        target = await repository.find_last_open(pair, mode)
         if not target:
             await message.answer("Не нашёл открытую сделку" + (f" по {pair}." if pair else "."))
             return
@@ -200,16 +215,17 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
                  if data.get(k)}
         if extra:
             trade = await repository.update_trade(trade["id"], extra)
-        await _card(message, format_trade_card(trade, "🔒 Сделка закрыта") + _link(trade["id"]))
+        await _card(message, format_trade_card(trade, _mode_title("🔒 Сделка закрыта", mode)) + _link(trade["id"]))
         since, _ = _since("week", cfg.timezone)
-        s = stats.compute_stats(await repository.stats_dicts(since))
+        s = stats.compute_stats(await repository.stats_dicts(since, mode))
         await message.answer(
             f"За неделю: {s.total_r:+.2f}R · WR {s.winrate * 100:.0f}% · "
             f"серия {s.streak:+d} · Zella {s.zella_score:.0f}"
         )
 
     async def _reply_edit(message: Message, data: dict):
-        last = await repository.get_last_trade()
+        mode = await _mode(message.from_user.id)
+        last = await repository.get_last_trade(mode)
         if not last:
             await message.answer("Нет записей для правки.")
             return
@@ -217,7 +233,7 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         merged = {**last, **fields}
         enriched = service.enrich(merged, last.get("trade_time") or now_ny(cfg.timezone), cfg.timezone)
         trade = await repository.update_trade(last["id"], enriched)
-        await _card(message, format_trade_card(trade, "✏️ Обновил") + _link(trade["id"]))
+        await _card(message, format_trade_card(trade, _mode_title("✏️ Обновил", mode)) + _link(trade["id"]))
 
     async def _process(message: Message, text: str | None, image: bytes | None, mime: str = "image/jpeg"):
         uid = message.from_user.id
@@ -232,7 +248,7 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
                 merged = {**base, **fields}
                 enriched = service.enrich(merged, base.get("trade_time"), cfg.timezone)
                 trade = await repository.update_trade(trade_id, enriched)
-                await _card(message, format_trade_card(trade, "✅ Дополнил") + _link(trade_id))
+                await _card(message, format_trade_card(trade, _mode_title("✅ Дополнил", base.get("mode", "live"))) + _link(trade_id))
                 return
 
         if image and not (text and text.strip()):
@@ -261,12 +277,17 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
                 "или команды /stats /last /open."
             )
 
+    def _mode_badge(mode: str) -> str:
+        return "🧪 Backtest" if mode == "backtest" else "🟢 Live"
+
     # ---- handlers ----
     @router.message(Command("start", "help"))
     async def cmd_start(message: Message):
+        mode = await _mode(message.from_user.id)
         await message.answer(
             "<b>📓 FX Journal</b>\n"
             "R-based ICT trading log\n\n"
+            f"Режим: <b>{_mode_badge(mode)}</b> (переключай кнопками ниже)\n\n"
             "• <b>Новая сделка</b> — фото графика с подписью, или фото + голосовое\n"
             "• <b>Закрытие</b> — «закрыл EURUSD +1.8R» (можно скрин после)\n"
             "• <b>Правка</b> — «исправь: стоп был 1.0832»\n\n"
@@ -275,31 +296,48 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
             reply_markup=MAIN_KB,
         )
 
+    @router.message(F.text == LIVE_BTN)
+    async def set_live(message: Message):
+        await repository.set_setting(f"mode:{message.from_user.id}", "live")
+        await message.answer("Режим: 🟢 <b>Live</b>", parse_mode="HTML", reply_markup=MAIN_KB)
+
+    @router.message(F.text == BT_BTN)
+    async def set_backtest(message: Message):
+        await repository.set_setting(f"mode:{message.from_user.id}", "backtest")
+        await message.answer(
+            "Режим: 🧪 <b>Backtest</b>\nТестовый журнал, отдельный от лайва — "
+            "логируй сделки как обычно, они не смешаются с боевой статистикой.",
+            parse_mode="HTML", reply_markup=MAIN_KB,
+        )
+
     @router.message(Command("stats"))
     async def cmd_stats(message: Message):
+        mode = await _mode(message.from_user.id)
         period = (message.text or "").partition(" ")[2].strip() or "week"
         since, label = _since(period, cfg.timezone)
-        s = stats.compute_stats(await repository.stats_dicts(since))
-        await message.answer(stats.format_stats(s, f"📊 Статистика ({label})"))
+        s = stats.compute_stats(await repository.stats_dicts(since, mode))
+        await message.answer(stats.format_stats(s, f"📊 Статистика {_mode_badge(mode)} ({label})"))
 
     @router.message(Command("last"))
     async def cmd_last(message: Message):
-        last = await repository.get_last_trade()
+        mode = await _mode(message.from_user.id)
+        last = await repository.get_last_trade(mode)
         if not last:
-            await message.answer("Записей пока нет.")
+            await message.answer(f"Записей в режиме {_mode_badge(mode)} пока нет.")
             return
-        await _card(message, format_trade_card(last, "🗒 Последняя сделка") + _link(last["id"]))
+        await _card(message, format_trade_card(last, _mode_title("🗒 Последняя сделка", mode)) + _link(last["id"]))
         chart = await repository.get_chart(last["id"], "before")
         if chart:
             await message.answer_photo(BufferedInputFile(chart[0], "chart.jpg"))
 
     @router.message(Command("open"))
     async def cmd_open(message: Message):
-        opens = await repository.get_open_trades()
+        mode = await _mode(message.from_user.id)
+        opens = await repository.get_open_trades(mode)
         if not opens:
-            await message.answer("Открытых позиций нет.")
+            await message.answer(f"Открытых позиций ({_mode_badge(mode)}) нет.")
             return
-        text = "\n\n".join(format_trade_card(t, "🟢 Открыта") for t in opens)
+        text = "\n\n".join(format_trade_card(t, _mode_title("🟢 Открыта", mode)) for t in opens)
         await _card(message, text)
 
     async def _send_news(message: Message):

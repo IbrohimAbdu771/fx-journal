@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from .db import session_scope
-from .models import Trade
+from .models import Setting, Trade
 from .service import EDITABLE_FIELDS
 
 _SETTABLE = set(EDITABLE_FIELDS) | {"trade_time", "closed_at", "name", "rr_planned"}
@@ -51,9 +51,9 @@ async def get_trade(trade_id: int) -> dict | None:
         return trade.to_dict() if trade else None
 
 
-async def find_last_open(pair: str | None = None) -> dict | None:
+async def find_last_open(pair: str | None = None, mode: str = "live") -> dict | None:
     async with session_scope() as s:
-        stmt = select(Trade).where(Trade.status == "Open")
+        stmt = select(Trade).where(Trade.status == "Open", Trade.mode == mode)
         if pair:
             stmt = stmt.where(Trade.pair == pair)
         stmt = stmt.order_by(Trade.trade_time.desc()).limit(1)
@@ -61,15 +61,19 @@ async def find_last_open(pair: str | None = None) -> dict | None:
         return trade.to_dict() if trade else None
 
 
-async def get_open_trades() -> list[dict]:
+async def get_open_trades(mode: str = "live") -> list[dict]:
     async with session_scope() as s:
-        stmt = select(Trade).where(Trade.status == "Open").order_by(Trade.trade_time.desc())
+        stmt = (
+            select(Trade)
+            .where(Trade.status == "Open", Trade.mode == mode)
+            .order_by(Trade.trade_time.desc())
+        )
         return [t.to_dict() for t in (await s.execute(stmt)).scalars().all()]
 
 
-async def get_last_trade() -> dict | None:
+async def get_last_trade(mode: str = "live") -> dict | None:
     async with session_scope() as s:
-        stmt = select(Trade).order_by(Trade.created_at.desc()).limit(1)
+        stmt = select(Trade).where(Trade.mode == mode).order_by(Trade.created_at.desc()).limit(1)
         trade = (await s.execute(stmt)).scalars().first()
         return trade.to_dict() if trade else None
 
@@ -126,23 +130,40 @@ async def delete_trade(trade_id: int) -> bool:
         return True
 
 
-async def list_trades(limit: int = 200, since: datetime | None = None) -> list[dict]:
+async def list_trades(limit: int = 200, since: datetime | None = None,
+                      mode: str = "live") -> list[dict]:
     async with session_scope() as s:
-        stmt = select(Trade)
+        stmt = select(Trade).where(Trade.mode == mode)
         if since:
             stmt = stmt.where(Trade.trade_time >= since)
         stmt = stmt.order_by(Trade.trade_time.desc()).limit(limit)
         return [t.to_dict() for t in (await s.execute(stmt)).scalars().all()]
 
 
-async def stats_dicts(since: datetime | None = None) -> list[dict]:
+async def stats_dicts(since: datetime | None = None, mode: str = "live") -> list[dict]:
     """Rows shaped for core.stats.compute_stats (oldest→newest)."""
     async with session_scope() as s:
-        stmt = select(Trade)
+        stmt = select(Trade).where(Trade.mode == mode)
         if since:
             stmt = stmt.where(Trade.trade_time >= since)
         stmt = stmt.order_by(Trade.trade_time.asc())
         return [t.to_stats_dict() for t in (await s.execute(stmt)).scalars().all()]
+
+
+# --- key/value settings (bot mode etc.) ---------------------------------------
+async def get_setting(key: str, default: str | None = None) -> str | None:
+    async with session_scope() as s:
+        obj = await s.get(Setting, key)
+        return obj.value if obj else default
+
+
+async def set_setting(key: str, value: str) -> None:
+    async with session_scope() as s:
+        obj = await s.get(Setting, key)
+        if obj:
+            obj.value = value
+        else:
+            s.add(Setting(key=key, value=value))
 
 
 async def set_chart(trade_id: int, which: str, data: bytes, mime: str) -> None:

@@ -14,7 +14,7 @@ CLOSED_OUTCOMES = {"Win", "Loss", "Breakeven"}
 # fields a caller may set on a trade
 EDITABLE_FIELDS = [
     "pair", "direction", "entry", "stop_loss", "take_profit", "lot", "risk_pct",
-    "result_r", "result_usd", "outcome", "status",
+    "result_r", "result_usd", "outcome", "status", "mode",
     "session", "sb_window", "asia_type", "setup", "sweep_reference", "ote_level",
     "mss_confirmed", "news_blackout",
     "plan_followed", "violation_type", "emotion", "notes", "raw_message",

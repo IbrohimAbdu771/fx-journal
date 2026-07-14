@@ -46,6 +46,8 @@ class Trade(Base):
     result_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(10), default="Open", index=True)
+    # "live" or "backtest" — keeps the two journals fully separate
+    mode: Mapped[str] = mapped_column(String(10), default="live", index=True)
 
     # ICT context
     session: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
@@ -98,6 +100,7 @@ class Trade(Base):
             "result_usd": self.result_usd,
             "outcome": self.outcome,
             "status": self.status,
+            "mode": self.mode,
             "session": self.session,
             "sb_window": self.sb_window,
             "asia_type": self.asia_type,
@@ -114,3 +117,12 @@ class Trade(Base):
             "has_chart_before": self.chart_before is not None,
             "has_chart_after": self.chart_after is not None,
         }
+
+
+class Setting(Base):
+    """Tiny key/value store (e.g. the bot's current live/backtest mode per user)."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255))

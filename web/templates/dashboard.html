@@ -9,7 +9,7 @@
 {% block content %}
 <div class="tabs">
   {% for p,label in [('all','Всё'),('week','Неделя'),('month','Месяц'),('year','Год')] %}
-    <a class="tab {{ 'active' if period==p }}" href="/?period={{p}}">{{label}}</a>
+    <a class="tab {{ 'active' if period==p }}" href="/?period={{p}}&mode={{mode}}">{{label}}</a>
   {% endfor %}
 </div>
 
@@ -112,7 +112,7 @@
       <td class="go">›</td>
     </tr>
     {% endfor %}
-    {% if not recent %}<tr><td colspan="10" class="empty">Пока нет сделок. <a href="/new">Добавить первую →</a></td></tr>{% endif %}
+    {% if not recent %}<tr><td colspan="10" class="empty">Пока нет сделок. <a href="/new?mode={{mode}}">Добавить первую →</a></td></tr>{% endif %}
   </table>
 </section>
 {% endblock %}
