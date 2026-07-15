@@ -59,3 +59,17 @@ def test_validate_close_trade():
     assert out["result_r"] == 1.8
     assert out["outcome"] == "Win"
     assert out["violation_type"] == []
+
+
+def test_validate_extracts_mae_mfe():
+    raw = {"intent": "close_trade", "pair": "EURUSD", "result_r": 1.8,
+           "mae_r": 0.4, "mfe_r": 2.1, "outcome": "Win"}
+    out = _validate(raw)
+    assert out["mae_r"] == 0.4
+    assert out["mfe_r"] == 2.1
+
+
+def test_validate_mae_mfe_absent_is_none_not_zero():
+    out = _validate({"intent": "close_trade", "result_r": -1.0, "outcome": "Loss"})
+    assert out["mae_r"] is None
+    assert out["mfe_r"] is None

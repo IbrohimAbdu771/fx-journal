@@ -41,18 +41,25 @@ async def create_tables() -> None:
     assert _engine is not None, "init_engine() must be called first"
     async with _engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-        # lightweight migration: add trades.mode to pre-existing installs
+        # lightweight migrations: add columns to pre-existing installs
         if _engine.dialect.name == "postgresql":
             await conn.exec_driver_sql(
                 "ALTER TABLE trades ADD COLUMN IF NOT EXISTS mode VARCHAR(10) DEFAULT 'live'"
             )
-        else:  # sqlite has no ADD COLUMN IF NOT EXISTS
-            try:
+            for col in ("mae_r", "mfe_r"):
                 await conn.exec_driver_sql(
-                    "ALTER TABLE trades ADD COLUMN mode VARCHAR(10) DEFAULT 'live'"
+                    f"ALTER TABLE trades ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION"
                 )
-            except Exception:
-                pass
+        else:  # sqlite has no ADD COLUMN IF NOT EXISTS
+            for ddl in (
+                "ALTER TABLE trades ADD COLUMN mode VARCHAR(10) DEFAULT 'live'",
+                "ALTER TABLE trades ADD COLUMN mae_r FLOAT",
+                "ALTER TABLE trades ADD COLUMN mfe_r FLOAT",
+            ):
+                try:
+                    await conn.exec_driver_sql(ddl)
+                except Exception:
+                    pass
         await conn.exec_driver_sql("UPDATE trades SET mode='live' WHERE mode IS NULL")
     logger.info("DB tables ready")
 

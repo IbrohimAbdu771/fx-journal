@@ -2,6 +2,7 @@
 {% block title %}Новая сделка — FX Journal{% endblock %}
 {% block content %}
 <h1>Новая сделка</h1>
+{% if error %}<div class="form-error">⚠️ {{ error }}</div>{% endif %}
 <form class="card form" method="post" action="{{ action }}" enctype="multipart/form-data">
   <div class="card-h">Параметры сделки</div>
   {% include "_fields.html" %}

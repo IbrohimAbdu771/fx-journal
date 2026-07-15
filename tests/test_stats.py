@@ -99,3 +99,52 @@ def test_no_losses_profit_factor_infinite():
     s = compute_stats(trades)
     assert s.profit_factor is None     # rendered as ∞
     assert "∞" in format_stats(s)
+
+
+# --------------------------------------------------------------------------- #
+# MAE / MFE
+# --------------------------------------------------------------------------- #
+def _mm(r, mae=None, mfe=None, day=1):
+    t = _t(r, r * 100, day=day)
+    if mae is not None:
+        t["mae_r"] = mae
+    if mfe is not None:
+        t["mfe_r"] = mfe
+    return t
+
+
+def test_mae_mfe_aggregates_and_subsample_n():
+    trades = [
+        _mm(2.0, mae=0.3, mfe=2.5, day=1),   # winner, both logged
+        _mm(1.0, mae=0.5, mfe=1.2, day=2),   # winner, both logged
+        _mm(3.0, day=3),                     # winner WITHOUT mae/mfe → excluded
+        _mm(-1.0, mae=0.8, mfe=0.6, day=4),  # loser, mfe ≥ 0.5
+        _mm(-1.0, mae=1.2, mfe=0.2, day=5),  # loser, mfe < 0.5
+    ]
+    mm = compute_stats(trades).mae_mfe
+    assert mm["has_data"] is True
+    # winners: only 2 of 3 carry the fields
+    assert mm["mae_win"] == {"avg": 0.4, "median": 0.4, "n": 2}
+    assert mm["mfe_win"] == {"avg": 1.85, "median": 1.85, "n": 2}
+    # losers
+    assert mm["mae_loss"] == {"avg": 1.0, "median": 1.0, "n": 2}
+    assert mm["mfe_loss"]["n"] == 2
+    # left on table over winners with mfe: (2.5-2.0)+(1.2-1.0) = 0.7 / 2 = 0.35
+    assert mm["left_on_table"] == {"avg": 0.35, "n": 2}
+    # losers up ≥ 0.5R before the stop: only the 0.6 one → 1/2
+    assert mm["losers_mfe_ge_05"] == {"pct": 0.5, "count": 1, "n": 2}
+
+
+def test_mae_mfe_empty_subsample_is_none():
+    # winners have no fields; one loser has MFE
+    mm = compute_stats([_mm(2.0, day=1), _mm(-1.0, mfe=0.7, day=2)]).mae_mfe
+    assert mm["mae_win"] == {"avg": None, "median": None, "n": 0}
+    assert mm["mfe_win"] == {"avg": None, "median": None, "n": 0}
+    assert mm["left_on_table"] == {"avg": None, "n": 0}
+    assert mm["mfe_loss"]["n"] == 1
+    assert mm["has_data"] is True
+
+
+def test_mae_mfe_no_data_flag_false():
+    assert compute_stats([_mm(2.0, day=1), _mm(-1.0, day=2)]).mae_mfe["has_data"] is False
+    assert compute_stats([]).mae_mfe["has_data"] is False

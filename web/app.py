@@ -175,6 +175,8 @@ async def _form_to_data(form) -> dict:
         "risk_pct": _f(form.get("risk_pct")),
         "result_r": _f(form.get("result_r")),
         "result_usd": _f(form.get("result_usd")),
+        "mae_r": _f(form.get("mae_r")),
+        "mfe_r": _f(form.get("mfe_r")),
         "outcome": _s(form.get("outcome")),
         "status": _s(form.get("status")),
         "mode": _s(form.get("mode")) or "live",
@@ -288,6 +290,16 @@ async def new_form(request: Request, mode: str = "live"):
 async def create_trade(request: Request):
     form = await request.form()
     data = await _form_to_data(form)
+    errors, _ = service.validate_mae_mfe(data)
+    if errors:
+        default_time = form.get("trade_time") or ict.now_ny(cfg.timezone).strftime("%Y-%m-%dT%H:%M")
+        return templates.TemplateResponse(
+            "trade_form.html",
+            {"request": request, "trade": data, "default_time": default_time,
+             "action": "/trades", "mode": _norm_mode(data.get("mode")),
+             "error": "; ".join(errors)},
+            status_code=400,
+        )
     data["raw_message"] = "manual/web"
     trade_time = _dt(form.get("trade_time"))
     enriched = service.enrich(data, trade_time, cfg.timezone)
@@ -318,8 +330,18 @@ async def edit_trade(request: Request, trade_id: int):
     if not base:
         return RedirectResponse("/", status_code=302)
     data = await _form_to_data(form)
-    trade_time = _dt(form.get("trade_time"))
     merged = {**base, **data}
+    errors, _ = service.validate_mae_mfe(merged)
+    if errors:
+        tt = base.get("trade_time")
+        default_time = tt.astimezone(ZoneInfo(cfg.timezone)).strftime("%Y-%m-%dT%H:%M") if tt else ""
+        return templates.TemplateResponse(
+            "trade_detail.html",
+            {"request": request, "trade": merged, "default_time": default_time,
+             "mode": merged.get("mode", "live"), "error": "; ".join(errors)},
+            status_code=400,
+        )
+    trade_time = _dt(form.get("trade_time"))
     enriched = service.enrich(merged, trade_time, cfg.timezone)
     enriched["trade_time"] = trade_time
     if form.get("action") == "close":
@@ -341,12 +363,32 @@ async def edit_trade(request: Request, trade_id: int):
 @app.post("/trade/{trade_id}/close")
 async def close_trade_route(request: Request, trade_id: int):
     form = await request.form()
+    close_data = {
+        "result_r": _f(form.get("result_r")),
+        "mae_r": _f(form.get("mae_r")),
+        "mfe_r": _f(form.get("mfe_r")),
+        "outcome": _s(form.get("outcome")),
+    }
+    errors, _ = service.validate_mae_mfe(close_data)
+    if errors:
+        trade = await repository.get_trade(trade_id)
+        tt = trade.get("trade_time") if trade else None
+        default_time = tt.astimezone(ZoneInfo(cfg.timezone)).strftime("%Y-%m-%dT%H:%M") if tt else ""
+        return templates.TemplateResponse(
+            "trade_detail.html",
+            {"request": request, "trade": {**(trade or {}), **close_data},
+             "default_time": default_time, "mode": (trade or {}).get("mode", "live"),
+             "error": "; ".join(errors)},
+            status_code=400,
+        )
     after, after_mime = await _read_upload(form.get("chart_after"))
     await repository.close_trade(
         trade_id,
-        result_r=_f(form.get("result_r")),
+        result_r=close_data["result_r"],
         result_usd=_f(form.get("result_usd")),
-        outcome=_s(form.get("outcome")),
+        mae_r=close_data["mae_r"],
+        mfe_r=close_data["mfe_r"],
+        outcome=close_data["outcome"],
         chart_after=after,
         chart_after_mime=after_mime,
     )
@@ -376,7 +418,7 @@ async def api_stats(period: str = "all", mode: str = "live"):
 
 EXPORT_COLS = [
     "id", "trade_time", "mode", "pair", "direction", "entry", "stop_loss", "take_profit",
-    "lot", "risk_pct", "rr_planned", "result_r", "result_usd", "outcome", "status",
+    "lot", "risk_pct", "rr_planned", "result_r", "result_usd", "mae_r", "mfe_r", "outcome", "status",
     "session", "sb_window", "asia_type", "setup", "sweep_reference", "ote_level",
     "mss_confirmed", "news_blackout", "plan_followed", "violation_type", "emotion", "notes",
 ]

@@ -5,6 +5,7 @@
 {% macro usd(v) %}{% if v is none %}—{% else %}{{ "%+.2f"|format(v) }}${% endif %}{% endmacro %}
 {% macro pct(v) %}{{ "%.0f"|format(v*100) }}%{% endmacro %}
 {% macro pf(v) %}{% if v is none %}∞{% else %}{{ v }}{% endif %}{% endmacro %}
+{% macro mmcell(a) %}{% if a and a.n %}{{ "%.2f"|format(a.avg) }}R<small>мед {{ "%.2f"|format(a.median) }} · n={{ a.n }}</small>{% else %}<span class="empty">—</span>{% endif %}{% endmacro %}
 
 {% block content %}
 <div class="tabs">
@@ -79,6 +80,35 @@
   </div>
   {% endfor %}
 </section>
+
+{% set mm = s.mae_mfe %}
+{% if mm and mm.has_data %}
+<section class="grid-2">
+  <div class="card">
+    <div class="card-h">MAE / MFE · качество входов и выходов</div>
+    <table class="mini-t mae-mfe">
+      <tr><th></th><th>avg MAE</th><th>avg MFE</th></tr>
+      <tr><td>Winners</td><td>{{ mmcell(mm.mae_win) }}</td><td>{{ mmcell(mm.mfe_win) }}</td></tr>
+      <tr><td>Losers</td><td>{{ mmcell(mm.mae_loss) }}</td><td>{{ mmcell(mm.mfe_loss) }}</td></tr>
+    </table>
+  </div>
+  <div class="card mae-tiles">
+    <div class="tile">
+      <span>Недобор · Left on table</span>
+      {% if mm.left_on_table.n %}
+      <b>{{ "%.2f"|format(mm.left_on_table.avg) }}R</b><i>n={{ mm.left_on_table.n }}</i>
+      {% else %}<b class="empty">—</b>{% endif %}
+    </div>
+    <div class="tile">
+      <span>Лузеры с MFE ≥ 0.5R</span>
+      {% if mm.losers_mfe_ge_05.n %}
+      <b>{{ "%.0f"|format(mm.losers_mfe_ge_05.pct*100) }}%</b>
+      <i>{{ mm.losers_mfe_ge_05.count }}/{{ mm.losers_mfe_ge_05.n }}</i>
+      {% else %}<b class="empty">—</b>{% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
 
 {% if open_trades %}
 <section class="card">

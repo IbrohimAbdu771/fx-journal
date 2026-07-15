@@ -44,6 +44,10 @@ class Trade(Base):
     # result
     result_r: Mapped[float | None] = mapped_column(Float, nullable=True)
     result_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # MAE/MFE — manually logged, non-negative R (max adverse / favorable excursion).
+    # None == "not measured" (distinct from 0.0).
+    mae_r: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mfe_r: Mapped[float | None] = mapped_column(Float, nullable=True)
     outcome: Mapped[str | None] = mapped_column(String(20), nullable=True)
     status: Mapped[str] = mapped_column(String(10), default="Open", index=True)
     # "live" or "backtest" — keeps the two journals fully separate
@@ -74,7 +78,7 @@ class Trade(Base):
 
     # ---- serialization ----
     STATS_FIELDS = (
-        "result_r", "result_usd", "outcome", "status",
+        "result_r", "result_usd", "mae_r", "mfe_r", "outcome", "status",
         "session", "setup", "pair", "direction", "trade_time",
     )
 
@@ -98,6 +102,8 @@ class Trade(Base):
             "rr_planned": self.rr_planned,
             "result_r": self.result_r,
             "result_usd": self.result_usd,
+            "mae_r": self.mae_r,
+            "mfe_r": self.mfe_r,
             "outcome": self.outcome,
             "status": self.status,
             "mode": self.mode,

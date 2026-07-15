@@ -102,6 +102,8 @@ class Stats:
     recovery_factor: float | None = None
     zella_score: float = 0.0
     zella_breakdown: dict = field(default_factory=dict)
+    # MAE / MFE (manual, optional) — each sub-aggregate carries its own sample size n
+    mae_mfe: dict = field(default_factory=dict)
     # series & breakdowns
     equity_curve: list = field(default_factory=list)     # [{i, r_cum, usd_cum, time}]
     daily: list = field(default_factory=list)            # [{date, r, usd, trades, wins, losses}]
@@ -246,6 +248,70 @@ def _day_streak(daily: list[dict]) -> int:
 
 
 # --------------------------------------------------------------------------- #
+# MAE / MFE (manual excursions) — subsample-aware aggregates
+# --------------------------------------------------------------------------- #
+def _median(vals: list[float]) -> float | None:
+    n = len(vals)
+    if not n:
+        return None
+    s = sorted(vals)
+    mid = n // 2
+    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2
+
+
+def _agg(vals: list[float]) -> dict:
+    """avg/median over a subsample; None (not 0) when the subsample is empty."""
+    n = len(vals)
+    return {
+        "avg": round(sum(vals) / n, 2) if n else None,
+        "median": round(_median(vals), 2) if n else None,
+        "n": n,
+    }
+
+
+def _present(rows: list[dict], key: str) -> list[float]:
+    """Values of `key` over rows where it is actually filled (None == not measured)."""
+    return [t[key] for t in rows if isinstance(t.get(key), (int, float))]
+
+
+def _mae_mfe(counted: list[dict]) -> dict:
+    wins = [t for t in counted if _r(t) > 0]
+    losses = [t for t in counted if _r(t) < 0]
+
+    mae_win = _agg(_present(wins, "mae_r"))
+    mae_loss = _agg(_present(losses, "mae_r"))
+    mfe_win = _agg(_present(wins, "mfe_r"))
+    mfe_loss = _agg(_present(losses, "mfe_r"))
+
+    # Left on table: how much winners undershot their own max favorable excursion.
+    lot_vals = [t["mfe_r"] - _r(t) for t in wins if isinstance(t.get("mfe_r"), (int, float))]
+    left = {
+        "avg": round(sum(lot_vals) / len(lot_vals), 2) if lot_vals else None,
+        "n": len(lot_vals),
+    }
+
+    # Losers that were up >= 0.5R before the stop took them out.
+    loser_mfe = _present(losses, "mfe_r")
+    n_lm = len(loser_mfe)
+    ge = sum(1 for v in loser_mfe if v >= 0.5)
+    losers_ge = {
+        "pct": round(ge / n_lm, 4) if n_lm else None,
+        "count": ge,
+        "n": n_lm,
+    }
+
+    has_data = bool(
+        mae_win["n"] or mae_loss["n"] or mfe_win["n"] or mfe_loss["n"] or left["n"] or n_lm
+    )
+    return {
+        "mae_win": mae_win, "mae_loss": mae_loss,
+        "mfe_win": mfe_win, "mfe_loss": mfe_loss,
+        "left_on_table": left, "losers_mfe_ge_05": losers_ge,
+        "has_data": has_data,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # Zella-style composite score (our transparent approximation)
 # --------------------------------------------------------------------------- #
 def _clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -290,6 +356,7 @@ def compute_stats(trades: list[dict]) -> Stats:
     s.no_trade = sum(1 for t in trades if t.get("outcome") == "No Trade")
 
     s.total = len(counted)
+    s.mae_mfe = _mae_mfe(counted)
     if not counted:
         s.zella_score, s.zella_breakdown = _zella(s)
         return s

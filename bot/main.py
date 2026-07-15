@@ -73,6 +73,11 @@ def _esc(x) -> str:
     return html.escape(str(x))
 
 
+def _clean_excursion(v) -> float | None:
+    """MAE/MFE are non-negative modules; drop anything else (None stays None)."""
+    return float(v) if isinstance(v, (int, float)) and v >= 0 else None
+
+
 def format_trade_card(t: dict, title: str = "✅ Сделка записана") -> str:
     """Render a trade (or an unsaved preview without id) as an HTML card."""
     head = f"<b>{title}</b>"
@@ -100,6 +105,12 @@ def format_trade_card(t: dict, title: str = "✅ Сделка записана")
         if t.get("outcome"):
             parts.append(t["outcome"])
         L.append(f"{emoji} <b>{' · '.join(parts)}</b>")
+
+    # MAE / MFE excursions (only when at least one is logged)
+    if t.get("mae_r") is not None or t.get("mfe_r") is not None:
+        mae = f"{t['mae_r']:.2f}R" if t.get("mae_r") is not None else "—"
+        mfe = f"{t['mfe_r']:.2f}R" if t.get("mfe_r") is not None else "—"
+        L.append(f"<pre>MAE {mae} · MFE {mfe}</pre>")
 
     # price block (monospace, aligned)
     price = []
@@ -224,10 +235,14 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         if not target:
             await message.answer("Не нашёл открытую сделку" + (f" по {pair}." if pair else "."))
             return
+        # MAE/MFE are optional; drop invalid (negative) values silently, keep the rest
+        mae, mfe = _clean_excursion(data.get("mae_r")), _clean_excursion(data.get("mfe_r"))
         trade = await repository.close_trade(
             target["id"],
             result_r=data.get("result_r"),
             result_usd=data.get("result_usd"),
+            mae_r=mae,
+            mfe_r=mfe,
             outcome=data.get("outcome"),
             chart_after=image,
             chart_after_mime=mime if image else None,
@@ -236,7 +251,11 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
                  if data.get(k)}
         if extra:
             trade = await repository.update_trade(trade["id"], extra)
-        await _card(message, format_trade_card(trade, _mode_title("🔒 Сделка закрыта", mode)) + _link(trade["id"]))
+        card = format_trade_card(trade, _mode_title("🔒 Сделка закрыта", mode))
+        _, anomalies = service.validate_mae_mfe(trade)
+        if anomalies:
+            card += "\n\n⚠️ " + "\n⚠️ ".join(_esc(a) for a in anomalies)
+        await _card(message, card + _link(trade["id"]))
         since, _ = _since("week", cfg.timezone)
         s = stats.compute_stats(await repository.stats_dicts(since, mode))
         await message.answer(
@@ -254,7 +273,11 @@ def build_dispatcher(cfg) -> tuple[Bot, Dispatcher]:
         merged = {**last, **fields}
         enriched = service.enrich(merged, last.get("trade_time") or now_ny(cfg.timezone), cfg.timezone)
         trade = await repository.update_trade(last["id"], enriched)
-        await _card(message, format_trade_card(trade, _mode_title("✏️ Обновил", mode)) + _link(trade["id"]))
+        card = format_trade_card(trade, _mode_title("✏️ Обновил", mode))
+        _, anomalies = service.validate_mae_mfe(trade)
+        if anomalies:
+            card += "\n\n⚠️ " + "\n⚠️ ".join(_esc(a) for a in anomalies)
+        await _card(message, card + _link(trade["id"]))
 
     async def _process(message: Message, text: str | None, image: bytes | None, mime: str = "image/jpeg"):
         uid = message.from_user.id

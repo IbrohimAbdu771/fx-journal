@@ -9,6 +9,15 @@
   {% endif %}
 </div>
 
+{% if error %}<div class="form-error">⚠️ {{ error }}</div>{% endif %}
+{% if trade.get('mae_r') is not none or trade.get('mfe_r') is not none %}
+<div class="excursion">
+  <span>MAE {% if trade.get('mae_r') is not none %}{{ "%.2f"|format(trade.mae_r) }}R{% else %}—{% endif %}</span>
+  <span>·</span>
+  <span>MFE {% if trade.get('mfe_r') is not none %}{{ "%.2f"|format(trade.mfe_r) }}R{% else %}—{% endif %}</span>
+</div>
+{% endif %}
+
 <div class="charts">
   {% if trade.has_chart_before %}<figure><figcaption>Before</figcaption><img src="/chart/{{ trade.id }}/before"></figure>{% endif %}
   {% if trade.has_chart_after %}<figure><figcaption>After</figcaption><img src="/chart/{{ trade.id }}/after"></figure>{% endif %}

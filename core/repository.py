@@ -95,6 +95,8 @@ async def close_trade(
     *,
     result_r: float | None = None,
     result_usd: float | None = None,
+    mae_r: float | None = None,
+    mfe_r: float | None = None,
     outcome: str | None = None,
     chart_after: bytes | None = None,
     chart_after_mime: str | None = None,
@@ -108,6 +110,10 @@ async def close_trade(
             trade.result_r = result_r
         if result_usd is not None:
             trade.result_usd = result_usd
+        if mae_r is not None:
+            trade.mae_r = mae_r
+        if mfe_r is not None:
+            trade.mfe_r = mfe_r
         if outcome is not None:
             trade.outcome = outcome
         elif trade.outcome is None and result_r is not None:

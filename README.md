@@ -29,6 +29,7 @@
 - **Equity curve** — кумулятивный R (inline SVG, без внешних библиотек).
 - **Календарь P&L** — по дням месяца (зелёный/красный/серый), в шапке сумма R и $ по знаку; листается **без перезагрузки страницы** (AJAX).
 - **Распределение R** — гистограмма R-мультипликаторов.
+- **MAE / MFE** — таблица 2×2 (Winners/Losers × avg MAE/avg MFE, медиана в подписи) + плитки «Недобор (Left on table)» и «Лузеры с MFE ≥ 0.5R»; у каждой цифры размер подвыборки `n` (блок скрыт, если за период нет ни одного замера).
 - **Разбивки:** по сессиям, сетапам, парам, направлению, дням недели.
 - **Zella Score** — прозрачная аппроксимация из 6 факторов (Win Rate, Profit Factor, Avg Win/Loss, Max Drawdown, Recovery Factor, Consistency); точные веса TradeZella не публикует.
 - **Открытые позиции** и лента последних сделок — строки кликабельны целиком (и с клавиатуры).
@@ -39,7 +40,7 @@
 ### 🤖 Telegram-бот (aiogram, long polling)
 - **Новая сделка:** фото графика с подписью, или фото + голосовое. Claude (`claude-sonnet-5`, vision + structured tool use) извлекает пару, направление, entry/SL/TP, лот, риск, сессию, SB-окно, sweep, OTE, MSS, сетап, дисциплину, эмоции.
 - **Подтверждение перед записью:** бот показывает карточку с inline-кнопками **✅ Сохранить / ✏️ Исправить / ❌ Отмена** — в БД пишется только после подтверждения (защита от тихого misparse цен, который незаметно испортил бы RR и R-метрики).
-- **Закрытие:** «закрыл EURUSD +1.8R» (можно приложить скрин после) — находит последнюю открытую по паре и обновляет результат/статус.
+- **Закрытие:** «закрыл EURUSD +1.8R» (можно приложить скрин после) — находит последнюю открытую по паре и обновляет результат/статус. Можно сразу добавить **MAE / MFE**: «закрыл GBPUSD -1R, mae 1.0, mfe 0.6» — в карточке появится моно-строка `MAE · MFE`.
 - **Правка:** «исправь: стоп был 1.0832» — обновляет последнюю запись.
 - **Уточнение:** если не хватает критичных полей (пара/направление/вход/стоп) — бот задаёт один вопрос и мержит ответ.
 - **Карточка сделки** — красиво оформленный HTML (моно-блок цен, секции ICT-контекст и дисциплина).
@@ -72,6 +73,7 @@
 
 - **P&L:** Net P&L ($), Total R, Avg R, Expectancy (R/сделка)
 - **Форма результата:** Win Rate, Profit Factor, Payoff (avg win / |avg loss|), Avg Win/Loss (R и $), Largest Win/Loss (R и $)
+- **MAE / MFE** (ручной ввод, опционально): avg/median MAE и MFE отдельно по винерам и лузерам, **Left on table** (средний недобор `mfe − result` по винерам), **доля лузеров с MFE ≥ 0.5R**. Считаются только по сделкам с заполненным полем — у каждого агрегата свой `n`; сделки без замера статистику не искажают
 - **Серии:** текущая серия, макс. серия побед/поражений, серия по дням
 - **Дни:** торговых дней, выигрышных/проигрышных, Day Win %, средний дневной R/$
 - **Риск:** Max Drawdown (R и $), Recovery Factor, **Std R**, **SQN** (System Quality Number = avg R / std R × √N)
@@ -99,9 +101,9 @@ journal/
 ├── core/                  # общий слой (без Telegram/HTTP)
 │   ├── config.py          # .env, нормализация DATABASE_URL (async, Neon SSL)
 │   ├── db.py              # async engine + сессии + миграции (asyncpg / aiosqlite)
-│   ├── models.py          # SQLAlchemy: Trade (+ поле mode), Setting
+│   ├── models.py          # SQLAlchemy: Trade (+ mode, mae_r/mfe_r), Setting
 │   ├── repository.py      # CRUD + выборки для аналитики + key/value настройки
-│   ├── service.py         # обогащение сделки: RR, сессия, имя, статус
+│   ├── service.py         # обогащение сделки: RR, сессия, имя, статус, валидация MAE/MFE
 │   ├── ict.py             # сессии, Silver Bullet, RR, словари полей
 │   └── stats.py           # все метрики (TradeZella-style) + Zella Score
 ├── bot/                   # Telegram (aiogram, long polling)
@@ -223,15 +225,15 @@ pytest -q
 
 - **Новая:** фото графика + `EURUSD long, вход 1.0850, стоп 1.0832, тейк 1.0905, NY reversal, OTE 0.705, MSS есть`
 - Фото без подписи → следом голосовое с описанием.
-- **Закрытие:** `закрыл EURUSD +1.8R`
-- **Правка:** `исправь: стоп был 1.0832`
+- **Закрытие:** `закрыл EURUSD +1.8R` (с замерами: `закрыл GBPUSD -1R, mae 1.0, mfe 0.6`)
+- **Правка:** `исправь: стоп был 1.0832` (или `исправь: mfe был 1.5`)
 - `/stats` — за неделю, `/stats month` — за месяц.
 
 ---
 
 ## 🗄 Модель данных
 
-**Trade** — сделка: время, пара, направление, entry/SL/TP, лот, риск %, RR planned, result R/$, outcome, status (Open/Closed), **mode (live/backtest)**, ICT-контекст (session, sb_window, asia_type, setup, sweep_reference, ote_level, mss_confirmed, news_blackout), психология (plan_followed, violation_type, emotion, notes), raw_message, скриншоты (before/after хранятся в БД).
+**Trade** — сделка: время, пара, направление, entry/SL/TP, лот, риск %, RR planned, result R/$, **MAE/MFE (mae_r/mfe_r — ручной ввод, опционально, неотрицательные в R)**, outcome, status (Open/Closed), **mode (live/backtest)**, ICT-контекст (session, sb_window, asia_type, setup, sweep_reference, ote_level, mss_confirmed, news_blackout), психология (plan_followed, violation_type, emotion, notes), raw_message, скриншоты (before/after хранятся в БД).
 
 **Setting** — key/value (текущий режим бота на пользователя).
 

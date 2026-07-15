@@ -7,5 +7,7 @@
     <label>Outcome{{ sel('outcome', ict.OUTCOMES, t.get('outcome')) }}</label>
     <label>Result R<input name="result_r" type="text" inputmode="decimal" placeholder="напр. 1.8 или -1" value="{{ t.get('result_r') if t.get('result_r') is not none else '' }}"></label>
     <label>Result $<input name="result_usd" type="text" inputmode="decimal" value="{{ t.get('result_usd') if t.get('result_usd') is not none else '' }}"></label>
+    <label>MAE (R)<input name="mae_r" type="text" inputmode="decimal" placeholder="ход против, напр. 0.7" value="{{ t.get('mae_r') if t.get('mae_r') is not none else '' }}"></label>
+    <label>MFE (R)<input name="mfe_r" type="text" inputmode="decimal" placeholder="ход в пользу, напр. 2.1" value="{{ t.get('mfe_r') if t.get('mfe_r') is not none else '' }}"></label>
   </div>
 </div>

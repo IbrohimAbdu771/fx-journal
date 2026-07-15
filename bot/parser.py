@@ -44,6 +44,9 @@ SYSTEM_PROMPT = """\
   списков — пустой массив). НИЧЕГО не выдумывай.
 - Числа — как числа (например 1.0832), без строк.
 - Для close_trade извлекай result_r, result_usd, outcome (Win/Loss/Breakeven/Missed/No Trade), pair.
+- MAE/MFE (опционально): mae_r — максимальный ход ПРОТИВ позиции, mfe_r — максимальный ход В \
+  ПОЛЬЗУ позиции, оба в R и НЕОТРИЦАТЕЛЬНЫЕ (модуль хода). Фразы: «mae 0.4, mfe 2.1», \
+  «просело на 0.7R» → mae_r=0.7, «доходило до +2R» → mfe_r=2.0. Если не сказано — null, не 0.
 - notes — короткая свободная заметка/дисциплина/эмоции, если трейдер их описал.
 - Всегда возвращай ровно один вызов record_trade.
 """
@@ -79,6 +82,8 @@ TOOL = {
             "risk_pct": _num(),
             "result_r": _num(),
             "result_usd": _num(),
+            "mae_r": _num(),
+            "mfe_r": _num(),
             "outcome": _enum(ict.OUTCOMES),
             "session": _enum(ict.SESSIONS),
             "sb_window": _bool(),
@@ -125,7 +130,8 @@ def _validate(data: dict) -> dict:
         val = data.get(key)
         out[key] = val if val in allowed else None
 
-    for key in ("entry", "stop_loss", "take_profit", "lot", "risk_pct", "result_r", "result_usd"):
+    for key in ("entry", "stop_loss", "take_profit", "lot", "risk_pct",
+                "result_r", "result_usd", "mae_r", "mfe_r"):
         val = data.get(key)
         out[key] = float(val) if isinstance(val, (int, float)) else None
 
