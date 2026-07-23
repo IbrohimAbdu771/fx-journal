@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import csv
+import hmac
 import io
 import logging
 import os
@@ -122,7 +123,7 @@ async def login(request: Request, password: str = Form("")):
             {"request": request, "error": "Слишком много попыток. Подождите 5 минут."},
             status_code=429,
         )
-    if _clean_pw(password) == _clean_pw(cfg.web_password):
+    if hmac.compare_digest(_clean_pw(password), _clean_pw(cfg.web_password)):
         request.session["auth"] = True
         return RedirectResponse("/", status_code=302)
     _login_hits[ip].append(time.time())
@@ -458,4 +459,7 @@ app.add_middleware(
     secret_key=(cfg.web_password or "dev") + "::fx-journal-session-v1",
     max_age=SESSION_TTL,
     same_site="lax",
+    # На Railway дашборд всегда за HTTPS — куку без Secure может унести
+    # любой узел по пути. Локальная отладка по http остаётся рабочей.
+    https_only=os.getenv("RAILWAY_ENVIRONMENT") is not None,
 )
