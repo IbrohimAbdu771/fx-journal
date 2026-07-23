@@ -320,6 +320,14 @@ def _clamp(x: float, lo: float = 0.0, hi: float = 100.0) -> float:
 
 def _zella(s: Stats) -> tuple[float, dict]:
     """0–100 composite from 6 sub-scores (equal weight). Heuristic, not TZ's exact formula."""
+    # Без закрытых сделок результативности нет. Иначе None-метрики (profit factor,
+    # payoff, recovery) и нулевая просадка подставляются как 100 и лепят фейковый
+    # балл ~67/100 из пустого журнала — вводит в заблуждение. Явно отдаём нули.
+    if s.total == 0:
+        return 0.0, {
+            "win_rate": 0, "profit_factor": 0, "avg_win_loss": 0,
+            "max_drawdown": 0, "recovery_factor": 0, "consistency": 0,
+        }
     win = _clamp((s.winrate / 0.6) * 100)                      # 60% winrate -> 100
     pf = 100.0 if s.profit_factor is None else _clamp((s.profit_factor / 2.0) * 100)
     payoff = 100.0 if s.payoff_ratio is None else _clamp((s.payoff_ratio / 2.0) * 100)

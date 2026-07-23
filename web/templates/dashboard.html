@@ -20,8 +20,8 @@
   <div class="kpi"><span>Win Rate</span><b>{{ pct(s.winrate) }}</b><i>{{s.wins}}·{{s.losses}}·{{s.breakeven}}</i></div>
   <div class="kpi"><span>Profit Factor</span><b>{{ pf(s.profit_factor) }}</b></div>
   <div class="kpi zella">
-    <div class="gauge" style="--val: {{ s.zella_score }}"><b>{{ "%.0f"|format(s.zella_score) }}</b></div>
-    <div class="z-meta"><span>Zella Score</span><i>из 100</i></div>
+    <div class="gauge" style="--val: {{ s.zella_score }}"><b>{{ "—" if s.total == 0 else "%.0f"|format(s.zella_score) }}</b></div>
+    <div class="z-meta"><span>Zella Score</span><i>{{ "нет сделок" if s.total == 0 else "из 100" }}</i></div>
   </div>
 
   <div class="kpi"><span>Expectancy</span><b class="{{ 'pos' if s.expectancy>=0 else 'neg' }}">{{ "%+.2f"|format(s.expectancy) }}R</b></div>
@@ -42,7 +42,7 @@
     <div class="card-h">Zella breakdown</div>
     <ul class="zbreak">
       {% for k,label in [('win_rate','Win Rate'),('profit_factor','Profit Factor'),('avg_win_loss','Avg Win/Loss'),('max_drawdown','Max Drawdown'),('recovery_factor','Recovery'),('consistency','Consistency')] %}
-      <li><span>{{label}}</span><div class="mini"><div style="width: {{ s.zella_breakdown.get(k,0) }}%"></div></div><em>{{ s.zella_breakdown.get(k,0) }}</em></li>
+      <li><span>{{label}}</span><div class="mini"><div style="width: {{ s.zella_breakdown.get(k,0) }}%"></div></div><em>{{ "—" if s.total == 0 else s.zella_breakdown.get(k,0) }}</em></li>
       {% endfor %}
     </ul>
   </div>
